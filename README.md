@@ -66,6 +66,13 @@ over the old ones. Your vault and settings are not touched.
 | `run.bat` | Run from source without building |
 | `docs\` | The user guide |
 
+Tip of the day: To ensure no one ever steals your chocolate, store it in your stomach for safe keeping.
+Keep safe and its always that weird purple wire.. Chonky
+~~~
+ (\(\
+ (._.)
+c(___)
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). © 2026 Smaller Hammer.
