@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<!-- Prompt Vault - A Smaller Hammer App
+     Copyright (c) 2026 Smaller Hammer
+     Licensed under the MIT License - see LICENSE file for details -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prompt Vault</title>
+
+<!-- ============================================================
+     PROMPT VAULT DESKTOP — user interface
+     Runs inside the desktop window opened by app.py. Offline: no web fonts,
+     no CDNs, no network calls. All storage goes through Python (vault.py) as
+     one AES-256-GCM encrypted vault file; no browser storage is used.
+     Stores text-to-image prompts with a reference image (resized to 1280 px and
+     re-encoded as JPEG), tags, notes and a copy button. A card holds up to 10
+     prompt variants (see "variants" in the script).
+     ============================================================ -->
+
+<style>
+:root{
+  --ink:#16202B;--ink-2:#243240;
+  --paper:#EAEEF2;--surface:#FFFFFF;--surface-2:#F6F8FA;
+  --muted:#5A6675;--faint:#8A95A3;
+  --line:#D8DFE6;--line-2:#E7ECF1;
+  --brass:#A8772C;--brass-hi:#C8943A;--brass-soft:#F3EAD8;
+  --gain:#1B7A4B;--gain-soft:#E4F1EA;--loss:#B5403A;--loss-soft:#F6E6E5;
+  --warn:#8A6414;--warn-soft:#F2E7CC;
+  --r:7px;--r-lg:11px;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 6px 20px rgba(22,32,43,.05);
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Consolas,monospace;
+  --eyebrow-size:13px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--sans);font-size:14px;line-height:1.45;color:var(--ink);
+  background:var(--paper);-webkit-font-smoothing:antialiased}
+a{color:var(--brass)}
+
+/* ---- shell ---- */
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.rail{background:var(--ink);color:#C9D3DD;padding:20px 14px;display:flex;flex-direction:column;gap:4px;
+  position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:6px;padding:4px 8px 18px;border-bottom:1px solid rgba(255,255,255,.08);margin:-16px 0 14px -14px}
+.brand .seal{width:56px;height:56px;flex:none;display:block}
+.brand b{color:#fff;font-size:14px;font-weight:650;letter-spacing:.02em;white-space:nowrap}
+.brand small{display:block;color:var(--faint);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;white-space:nowrap}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:11px;background:none;border:0;color:#AEBAC6;padding:9px 11px;border-radius:var(--r);font-size:13.5px;text-align:left;cursor:pointer;width:100%}
+.nav button:hover{background:rgba(255,255,255,.05)}
+.nav button.on{background:rgba(200,148,58,.14);color:#fff}
+.nav button.on .ic{color:var(--brass-hi)}
+.nav .ic{width:17px;height:17px;color:#8595A4;flex:none}
+.railver{font-size:10.5px;color:var(--faint);letter-spacing:.04em;padding:12px 8px 0;margin-top:auto}
+.railver b{color:#9FB0C0;font-weight:600}
+.main{padding:26px 30px 60px}
+/* v5.5: the Library uses the full window (5-6 cards across at 1920x1080);
+   the Data screen keeps a reading width so its text lines stay short. */
+.main.narrow{max-width:1180px}
+
+/* ---- type / page header ---- */
+.pagehead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px}
+.eyebrow{font-size:var(--eyebrow-size);letter-spacing:.12em;text-transform:uppercase;color:var(--brass);font-weight:700;margin-bottom:7px}
+h1{margin:0;font-size:22px;font-weight:680;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:13px;margin-top:3px}
+
+/* ---- grids ---- */
+.grid{display:grid;gap:16px}
+.cols-1{grid-template-columns:1fr}
+.cols-2{grid-template-columns:1fr 1fr}
+
+/* ---- cards ---- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.cardhead{display:flex;justify-content:space-between;align-items:center;padding:14px 17px;border-bottom:1px solid var(--line)}
+.cardhead h3{margin:0;font-size:14px;font-weight:650}
+.cardhead .hint{font-size:12px;color:var(--faint)}
+.pad{padding:16px 17px}
+
+/* ---- pills / buttons / chips ---- */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.pill.nsfw{background:var(--warn-soft);color:var(--warn)}
+/* key/value stat grid — same component as Prompt Forge's, so the two apps match */
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
+.kv div:nth-child(odd){color:var(--muted)}
+.num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:8px 14px;font-size:13.5px;font-weight:550;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.btn.brass{background:var(--brass);color:#fff;border-color:var(--brass)}
+.btn.brass:hover{background:#946826}
+.btn.ghost{background:none}
+.btn.danger{color:var(--loss);border-color:var(--loss-soft)}
+.btn.danger:hover{background:var(--loss-soft)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.iconbtn{border:0;background:none;color:var(--faint);cursor:pointer;padding:4px;border-radius:5px;font-size:15px;line-height:1}
+.iconbtn:hover{background:var(--loss-soft);color:var(--loss)}
+.tag{display:inline-block;background:var(--surface-2);border:1px solid var(--line-2);border-radius:5px;padding:1px 8px;font-size:12px;color:var(--muted)}
+
+/* ---- inputs ---- */
+label.fld{display:block;font-size:12px;color:var(--muted);font-weight:550;margin:12px 0 5px}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--sans);background:#fff;color:var(--ink)}
+.cardcat{width:auto;max-width:110px;padding:5px 6px;font-size:11.5px;border-radius:6px;color:var(--muted)}
+textarea{resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);border-color:var(--brass)}
+.checkline{display:flex;align-items:center;gap:8px;margin:14px 0 6px}
+.checkline input[type=checkbox]{width:auto}
+
+/* ---- library ---- */
+.searchrow{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.libheader{position:sticky;top:0;z-index:5;background:var(--paper);padding-top:26px;margin-top:-26px;padding-bottom:2px;margin-bottom:4px}
+.searchrow input{flex:1;min-width:180px}
+.chiprow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+/* --card-w is the user's card-size setting (v5.6, Data & Security > Display). It is
+   a minimum: auto-fill fits as many columns as that allows, then 1fr shares out the
+   remainder, so real cards are slightly wider than the setting. The Display preview
+   computes that real width so it is genuinely 1:1. */
+.promptgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-w,230px),1fr));gap:16px}
+.grouphead{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);font-weight:700;margin:16px 0 8px;padding-top:10px;border-top:1px solid var(--line-2)}
+.pcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.pcard.locked{border-style:dashed;background:var(--surface-2);box-shadow:none}
+.pcard .thumb{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--surface-2)}
+.pcard .thumb-empty{width:100%;aspect-ratio:4/3;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px}
+/* Image cards (v5.5): prompt text hidden and the thumbnail grown into the space it
+   used. Three clamped lines + the body gap is ~63px; on a ~250px-wide card a 4:3
+   thumb is ~187px tall, so 1:1 (~250px) spends almost exactly that space. */
+.promptgrid.imgcards .pcard .ptext{display:none}
+.promptgrid.imgcards .pcard .thumb,.promptgrid.imgcards .pcard .thumb-empty{aspect-ratio:1/1}
+.pcard .body{padding:12px 13px;flex:1;display:flex;flex-direction:column;gap:8px}
+.pcard.locked .body{align-items:center;text-align:center;justify-content:center}
+.pcard .ptext{font-size:13px;color:var(--ink);line-height:1.4;max-height:4.2em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.pcard .pcomments{font-size:12px;color:var(--muted);line-height:1.35;max-height:2.7em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pcard .pseed{font-size:11px;color:var(--faint)}
+.pcard .pseed code{font-family:var(--mono);color:var(--muted)}
+.pcard .tagrow{display:flex;flex-wrap:wrap;gap:5px}
+.pcard .foot{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;border-top:1px solid var(--line-2)}
+.empty{text-align:center;padding:46px 20px;color:var(--muted)}
+.rowlabel{font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+.catmgmt{margin-top:6px}
+.rollup{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.rollup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;cursor:pointer}
+.rollup-head:hover{background:var(--surface-2)}
+.rollup-head .rtitle{display:flex;align-items:center;gap:9px;font-weight:650;font-size:14.5px}
+.rollup-head .rcount{font-size:12px;color:var(--faint);font-weight:500;margin-left:2px}
+.rollup-chevron{color:var(--faint);transition:transform .15s;flex:none}
+.rollup.open .rollup-chevron{transform:rotate(90deg)}
+.rollup-body{padding:0 16px 16px}
+.rollup-actions{display:flex;gap:2px}
+.drag-handle{color:var(--faint);cursor:grab;display:flex;align-items:center;flex:none}
+.drag-handle:active{cursor:grabbing}
+.drag-handle-spacer{display:inline-block;width:13px;flex:none}
+.rollup.dragging{opacity:.45}
+.rollup.drag-over{outline:2px dashed var(--brass);outline-offset:-2px}
+
+/* ---- lock status (rail) ---- */
+.lockbox{padding:10px 8px;border-top:1px solid rgba(255,255,255,.08);margin-top:10px}
+.lockbox .st{font-size:11.5px;color:var(--faint);margin-bottom:6px}
+.lockbox button{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;padding:7px;border-radius:6px;font-size:12.5px;cursor:pointer}
+.lockbox button:hover{background:rgba(255,255,255,.12)}
+
+/* ---- toast / modal ---- */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:9px;z-index:60;pointer-events:none;transition:.18s}
+/* Persistent, dismiss-proof banner for a failed write. Deliberately not a toast:
+   a toast is transient and self-overwriting, which is exactly how a silent data
+   loss went unnoticed before v3.16. Stays up until a save actually succeeds. */
+.savealert{position:fixed;left:0;right:0;top:0;z-index:120;background:var(--loss);color:#fff;
+  padding:10px 18px;font-size:13px;font-weight:600;line-height:1.4;text-align:center;
+  box-shadow:0 2px 12px rgba(22,32,43,.3)}
+.savealert[hidden]{display:none}
+/* ---- PIN gate (desktop build) ---- */
+#gateRoot[hidden]{display:none}
+.gatewrap{position:fixed;inset:0;background:var(--ink);display:grid;place-items:center;padding:24px;overflow:auto}
+.gate{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px 24px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.gatebrand{display:flex;align-items:center;gap:6px;margin-bottom:18px}
+.gatebrand .seal{width:56px;height:56px;flex:none;display:block}
+.gatebrand b{color:var(--text);font-size:14px;font-weight:650;letter-spacing:.02em;white-space:nowrap;display:block}
+.gatebrand small{display:block;color:var(--faint);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;white-space:nowrap}
+.gate h2{margin:0 0 6px;font-size:18px;color:var(--text)}
+.gatehint{color:var(--muted);font-size:12.5px;line-height:1.5;margin:0 0 16px}
+.gate input{width:100%;margin-bottom:10px}
+.gatemsg{min-height:18px;color:var(--loss);font-size:12px;margin:2px 0 10px}
+.gate .btn{width:100%;justify-content:center}
+.gatepath{margin-top:14px;color:var(--faint);font-size:10.5px;word-break:break-all;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--brass-hi)}
+.scrim{position:fixed;inset:0;background:rgba(16,22,30,.45);display:grid;place-items:center;z-index:50;padding:20px;overflow-y:auto}
+.modal{background:var(--surface);border-radius:var(--r-lg);width:min(480px,96vw);box-shadow:0 20px 60px rgba(16,22,30,.3);padding:20px 22px;margin:auto}
+.modal.wide{width:min(600px,96vw)}
+.modal.card{width:min(820px,96vw)}   /* v6.0 card editor: room for ~6 variant tabs and one row of actions */
+.modal .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.modal .mh h3{margin:0;font-size:16px}
+.modal .foot{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.imgprev{max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--line);margin-top:8px;display:block}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(22,32,43,.55);color:#fff;border:0;width:38px;height:38px;border-radius:50%;font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lightbox-nav:hover{background:rgba(22,32,43,.8)}
+.lightbox-nav.left{left:8px}
+.lightbox-nav.right{right:8px}
+.ratiotag{display:inline-block;font-family:var(--mono);font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line-2);border-radius:5px;padding:1px 7px;white-space:nowrap}
+.dispgrid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:22px;align-items:start}
+.dispgrid input[type=range],.libsize input[type=range]{padding:0;border:0;accent-color:var(--brass);background:none}
+.libsize input[type=range]:focus{outline:none}
+/* Library-header card size slider (v5.7) — same setting as Data & Security > Display */
+.libsize{display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);height:36px}
+.libsize .rowlabel{white-space:nowrap}
+.libsize input[type=range]{width:150px}
+.libsize .num{font-size:12px;color:var(--muted);min-width:44px;text-align:right}
+.dispgrid input[type=range]:focus{outline:none}
+.cardpreview{background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-lg);padding:16px;overflow:auto;max-height:78vh}
+.cardpreview .promptgrid{display:block}
+.cardpreview .pcard{pointer-events:none;user-select:none}
+@media(max-width:1100px){.dispgrid{grid-template-columns:1fr}}
+.fldrow{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+.fldrow label.fld{margin-bottom:5px}
+.fldrow .btn{margin-bottom:4px}
+/* ---- right-click menu (v5.5) ----
+   pywebview turns WebView2's own context menu off whenever debug is off, so the
+   app supplies a small one for text fields and selected text. */
+.ctxmenu{position:fixed;z-index:200;min-width:150px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 30px rgba(16,22,30,.22);padding:4px;font-size:13px}
+.ctxmenu button{display:flex;justify-content:space-between;gap:18px;width:100%;background:none;border:0;padding:7px 10px;border-radius:5px;text-align:left;cursor:pointer;color:var(--ink);font-size:13px}
+.ctxmenu button:hover:not(:disabled){background:var(--brass-soft)}
+.ctxmenu button:disabled{color:var(--faint);cursor:default}
+.ctxmenu kbd{font-family:var(--sans);font-size:11.5px;color:var(--faint)}
+.ctxmenu hr{border:0;border-top:1px solid var(--line-2);margin:4px 2px}
+
+/* ---- variants (v6.0) ----
+   A card can hold up to MAX_VARIANTS prompts. Option A from the 2026-11-02 review:
+   a stacked edge behind the card (box-shadow only, so it takes no layout space and
+   the 1:1 Display preview stays exact), a corner count, dots on the image, and
+   arrows that appear on hover. */
+.pcard.multi{box-shadow:0 1px 2px rgba(22,32,43,.06),5px 5px 0 -1px var(--surface),5px 5px 0 0 var(--line),10px 10px 0 -2px var(--surface),10px 10px 0 -1px var(--line)}
+.pcard .tw{position:relative;overflow:hidden}
+.vbadge{position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:5px;background:rgba(22,32,43,.74);color:#fff;font-size:11.5px;font-weight:650;padding:3px 8px 3px 7px;border-radius:999px;font-variant-numeric:tabular-nums;pointer-events:none}
+.vnav{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:0;background:rgba(22,32,43,.6);color:#fff;font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .12s}
+.vnav:hover{background:rgba(22,32,43,.82)}
+.vnav.left{left:6px}.vnav.right{right:6px}
+.tw:hover .vnav,.vnav:focus-visible{opacity:1}
+.vdots{position:absolute;left:0;right:0;bottom:0;padding:16px 0 8px;display:flex;justify-content:center;gap:5px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.38));pointer-events:none}
+.vdots button{pointer-events:auto;height:6px;width:6px;padding:0;border:0;border-radius:3px;cursor:pointer;background:rgba(255,255,255,.55);transition:width .12s}
+.vdots button.on{width:16px;background:#fff}
+.vlabel{display:flex;align-items:center;gap:7px;min-width:0}
+.vlabel b{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A5F1F;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vprim{font-size:10.5px;font-weight:650;color:var(--muted);background:var(--surface-2);border:1px solid var(--line-2);border-radius:5px;padding:0 6px;flex:none}
+/* drag a card onto another to make it a variant (v6.1) */
+.vgrip{position:absolute;top:8px;left:8px;z-index:2;width:26px;height:26px;border-radius:7px;background:rgba(22,32,43,.62);color:#fff;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:.55;transition:opacity .12s}
+.vgrip:active{cursor:grabbing}
+.pcard:hover .vgrip,.vgrip:focus-visible{opacity:1}
+.pcard.dragging{opacity:.45}
+.pcard.drop-ok{outline:3px dashed var(--brass);outline-offset:-3px}
+.pcard.drop-full{outline:3px dashed var(--loss);outline-offset:-3px}
+.pcard.drop-ok::after,.pcard.drop-full::after{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:3;color:#fff;font-size:12.5px;font-weight:650;padding:7px 13px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(16,22,30,.3)}
+.pcard.drop-ok::after{content:"Drop to add as a variant";background:var(--brass)}
+.pcard.drop-full::after{content:"No room \2014  10 prompts max";background:var(--loss)}
+.pcard.drop-ok *,.pcard.drop-full *{pointer-events:none}
+.mergeflow{display:flex;align-items:center;gap:12px;margin:10px 0 4px}
+.mergeflow img,.mergeflow .mf-empty{width:72px;height:54px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block;flex:none}
+.mergeflow .mf-empty{background:var(--surface-2);border-style:dashed}
+.mergeflow .mf-txt{font-size:12.5px;color:var(--muted);line-height:1.35;max-height:2.7em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mergeflow .mf-arrow{color:var(--brass);font-size:20px;flex:none}
+.mergerows{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.mergerow{display:flex;align-items:center;gap:10px}
+.mergerow img,.mergerow .mf-empty{width:44px;height:33px;object-fit:cover;border-radius:4px;display:block;flex:none;border:1px solid var(--line)}
+.mergerow .mf-empty{background:var(--surface-2);border-style:dashed}
+.mergerow b{font-size:12px;color:var(--muted);font-weight:650;white-space:nowrap;min-width:70px}
+.mergenote{font-size:12.5px;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:6px 10px;margin-top:10px}
+
+/* lightbox */
+.lbvchip{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A5F1F;font-weight:700;background:var(--brass-soft);border-radius:5px;padding:2px 7px}
+.lbstrip{display:flex;gap:8px;margin-top:12px;padding:2px 2px 6px;overflow-x:auto}
+.lbstrip button{flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px;border-radius:7px;background:none;border:0;cursor:pointer;font-family:var(--sans)}
+.lbstrip button:hover:not(:disabled){background:var(--surface-2)}
+.lbstrip button.on,.lbstrip button.on:hover{background:var(--brass-soft);outline:2px solid var(--brass)}
+.lbstrip button:disabled{cursor:default}
+.lbstrip img,.lbstrip .noimg{width:64px;height:48px;object-fit:cover;border-radius:5px;display:block}
+.lbstrip .noimg{background:var(--surface-2);border:1px dashed var(--line);box-sizing:border-box;font-size:10.5px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.lbstrip span{font-size:11px;white-space:nowrap;color:var(--muted);max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.lbstrip button.on span{color:var(--ink);font-weight:650}
+.lbmeta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+.lbkeys{font-size:11.5px;color:var(--muted)}
+.lbnext{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(22,32,43,.82);color:#fff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;pointer-events:none;animation:lbfade 1.6s forwards}
+@keyframes lbfade{0%{opacity:0}12%{opacity:1}75%{opacity:1}100%{opacity:0}}
+/* editor tabs */
+.vtabsrow{display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--line);margin-top:12px}
+.vtabsrow>.btn{margin-bottom:6px;white-space:nowrap}
+.vtabs{display:flex;gap:2px;overflow-x:auto;flex:1;min-width:0}
+.vtab{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px 7px 6px;border:0;border-bottom:2px solid transparent;border-radius:7px 7px 0 0;cursor:pointer;color:var(--ink);background:none;margin-bottom:-1px;text-align:left;font-family:var(--sans);font-weight:500}
+.vtab:hover{background:var(--surface-2)}
+.vtab.on,.vtab.on:hover{border-bottom-color:var(--brass);background:var(--brass-soft);font-weight:650}
+.vtab img,.vtab .vt-empty{width:40px;height:30px;object-fit:cover;border-radius:4px;display:block;flex:none}
+.vtab .vt-empty{background:var(--surface-2);border:1px dashed var(--line);box-sizing:border-box}
+.vtab small{display:block;font-size:10.5px;color:var(--muted);font-weight:600;line-height:1.2}
+.vtab span{display:block;font-size:12.5px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;line-height:1.25}
+.vpanel{background:var(--surface-2);border:1px solid var(--line-2);border-top:0;border-radius:0 0 9px 9px;padding:12px 16px 16px}
+.vactions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.vactions .rowlabel{margin-right:auto}
+.vmsg{margin-top:10px;font-size:12.5px;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:6px 10px}
+.btn:disabled,.btn:disabled:hover{color:var(--faint);cursor:default;background:var(--surface);border-color:var(--line)}
+
+/* ---- responsive: rail -> horizontal top bar (same markup, CSS transform only) ---- */
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .rail{position:sticky;top:0;height:auto;overflow-y:visible;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 12px;gap:6px}
+  .brand,.railver,.lockbox{display:none}
+  .nav{flex-direction:row;gap:4px}
+  .nav button{width:auto;white-space:nowrap}
+  .main{padding:18px 16px 50px}
+  .cols-2{grid-template-columns:1fr}
+  .libheader{position:static;margin-top:0;padding-top:0}
+}
+</style>
+</head>
+<body>
+
+<!-- seed / demo data; loaded only when no saved data exists -->
+
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><svg class="seal" role="img" aria-label="Smaller Hammer logo" viewBox="0 0 1075.454968 1176.557847" xmlns="http://www.w3.org/2000/svg"><path transform="translate(-87.806878,1221.697957) scale(0.100000,-0.100000)" d="M6956 12209 c-102 -24 -281 -133 -453 -276 -126 -104 -325 -308 -433 -443 -268 -335 -471 -748 -542 -1100 -31 -157 -32 -451 -1 -610 11 -58 20 -106 18 -108 -1 -1 -42 9 -91 23 -49 15 -133 31 -186 37 -75 9 -95 14 -88 24 24 28 60 141 60 186 0 83 -55 115 -180 106 -80 -6 -187 -60 -276 -140 -39 -36 -61 -51 -52 -36 72 112 111 188 116 225 4 37 1 46 -25 72 -42 42 -99 48 -202 22 -153 -38 -319 -145 -416 -269 -52 -65 -121 -196 -131 -247 -3 -19 -8 -35 -10 -35 -2 0 -32 23 -66 50 -87 70 -262 155 -383 187 -141 36 -318 36 -457 0 -322 -84 -641 -305 -998 -689 -507 -546 -1063 -1414 -1214 -1895 -85 -271 -91 -517 -16 -664 134 -262 609 -223 1070 86 446 300 746 690 1123 1460 174 356 188 384 184 360 -17 -81 -145 -513 -181 -610 -140 -381 -294 -640 -558 -938 -109 -124 -127 -170 -109 -279 12 -76 56 -182 97 -235 14 -19 24 -35 23 -37 -2 -1 -31 -10 -64 -20 -247 -75 -558 -273 -790 -502 -191 -189 -332 -384 -441 -609 -187 -387 -225 -726 -102 -909 13 -18 36 -51 51 -73 l28 -41 -17 -83 c-31 -153 10 -328 97 -417 61 -62 115 -86 194 -87 61 0 72 -3 88 -23 11 -12 42 -35 70 -50 46 -24 63 -27 147 -27 88 0 101 3 162 33 37 18 80 49 96 68 26 32 34 35 73 32 l43 -3 -58 -62 c-42 -46 -79 -73 -134 -100 -73 -36 -80 -38 -176 -38 -91 0 -107 3 -161 29 -50 25 -70 29 -122 27 -104 -5 -166 20 -246 101 -37 37 -74 68 -82 68 -39 0 -103 -139 -140 -309 -88 -392 -50 -752 116 -1084 72 -144 140 -238 264 -362 120 -121 234 -203 382 -275 50 -25 92 -48 92 -51 1 -4 -18 -9 -41 -13 -66 -11 -238 -71 -320 -112 -177 -89 -310 -210 -374 -339 -34 -68 -39 -90 -42 -160 -3 -67 0 -89 16 -121 63 -121 237 -195 467 -198 109 -1 123 -3 149 -23 61 -49 230 -68 516 -60 361 11 666 56 907 135 337 111 623 326 623 469 0 46 -18 90 -44 112 -32 27 -14 28 87 5 383 -87 879 -90 1297 -8 69 13 129 24 134 24 4 0 -6 -16 -22 -35 -35 -39 -48 -87 -38 -140 10 -51 119 -163 236 -240 304 -203 670 -307 1125 -322 271 -8 432 15 469 68 12 18 19 19 85 8 136 -21 339 26 437 100 26 20 58 56 71 81 22 40 24 56 21 135 -2 76 -8 100 -34 155 -98 206 -357 379 -694 463 l-55 13 110 57 c155 80 283 174 405 297 285 287 445 640 522 1150 20 132 17 545 -5 700 -71 494 -209 908 -412 1243 -19 31 -32 57 -29 57 3 0 25 -17 49 -38 137 -121 403 -99 522 44 31 36 42 43 87 49 145 19 284 140 337 292 11 32 23 93 26 135 l6 78 326 129 c441 174 470 185 476 179 3 -2 36 -98 75 -211 38 -114 77 -218 85 -231 33 -49 71 -51 208 -12 197 56 469 154 494 178 13 12 28 39 33 59 12 43 -12 123 -227 754 -58 171 -117 346 -130 390 -29 92 -73 145 -121 145 -77 0 -365 -96 -554 -184 -130 -61 -138 -90 -74 -267 55 -152 63 -184 44 -192 -148 -59 -761 -313 -782 -324 -28 -14 -30 -14 -75 30 -192 186 -620 351 -993 383 -43 3 -78 8 -78 10 0 2 18 27 41 56 55 73 154 276 181 373 29 109 32 327 4 430 -23 89 -81 214 -137 296 -59 87 -221 252 -295 301 l-60 40 -54 136 c-147 379 -303 643 -502 847 l-88 92 61 11 c72 13 110 43 289 222 510 510 742 1080 716 1755 -13 357 -93 752 -191 946 -63 124 -141 165 -259 138z M10745 6691 c-11 -5 -28 -17 -37 -27 -9 -11 -66 -145 -127 -299 -60 -154 -119 -302 -130 -328 -32 -74 -26 -106 18 -92 28 9 421 632 421 667 0 62 -80 105 -145 79z M11195 6318 c-45 -25 -588 -454 -602 -475 -17 -26 -10 -43 18 -43 43 0 679 337 704 373 33 47 12 113 -45 142 -34 18 -48 18 -75 3z M10985 5690 c-343 -35 -359 -38 -363 -67 -2 -14 3 -23 15 -27 19 -6 321 -37 550 -57 78 -6 153 -9 167 -5 67 17 91 112 41 161 -31 32 -46 31 -410 -5z M9890 5570 c-97 -12 -150 -29 -176 -55 -23 -23 -24 -30 -24 -172 0 -146 -1 -148 -19 -124 l-19 24 -43 -26 c-72 -42 -174 -132 -245 -214 -315 -369 -497 -920 -497 -1503 0 -373 73 -691 229 -989 136 -262 353 -498 587 -640 101 -62 101 -62 137 9 17 34 33 60 35 58 2 -2 -20 -77 -50 -166 l-53 -162 -3 -532 c-2 -374 0 -539 8 -553 6 -11 23 -31 38 -45 26 -25 30 -25 213 -28 212 -3 233 2 266 73 17 34 17 63 6 453 -18 632 -17 627 -79 825 -29 93 -51 170 -48 173 2 3 26 -31 51 -75 56 -98 61 -99 183 -35 145 75 274 182 395 323 273 322 413 675 449 1134 28 363 -38 796 -172 1134 -86 217 -227 447 -362 589 -83 88 -199 184 -223 184 -7 0 -20 -10 -28 -22 -15 -21 -16 -11 -16 130 0 147 -1 154 -23 176 -35 35 -148 57 -312 61 -77 2 -169 0 -205 -5z M8781 2106 c-180 -84 -311 -151 -322 -165 -18 -22 -19 -52 -19 -692 l0 -668 22 -15 c12 -9 30 -16 39 -16 19 0 1106 537 1114 550 7 11 43 357 52 495 l6 100 -89 71 c-110 88 -255 238 -364 378 -69 87 -88 106 -109 105 -14 0 -163 -64 -330 -143z M10909 2168 c-122 -157 -342 -363 -489 -459 -18 -12 -24 -25 -24 -50 1 -19 4 -150 8 -292 7 -217 11 -261 25 -276 9 -11 108 -63 221 -117 113 -53 360 -170 549 -260 189 -90 356 -164 371 -164 15 0 35 9 46 21 17 19 18 48 15 687 -1 392 -6 673 -12 684 -11 21 -592 308 -623 308 -16 0 -41 -24 -87 -82z" fill="var(--brass-hi)" fill-rule="evenodd"/></svg><div><b>Prompt Vault</b><small>A Smaller Hammer App</small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div id="lockbox"></div>
+    <div class="railver" id="railver"></div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<div id="gateRoot" hidden></div>
+<div id="savealert" class="savealert" hidden></div>
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+<div id="ctxRoot"></div>
+
+<script>
+/* ============================ constants ============================ */
+let APP_VERSION='6.1', APP_BUILD='2026-11-02';   // authoritative values come from Python
+let vaultPath='';      // reported by Python at boot
+let vaultExists=false;
+const SEAL_SVG=`<svg class="seal" role="img" aria-label="Smaller Hammer logo" viewBox="0 0 1075.454968 1176.557847" xmlns="http://www.w3.org/2000/svg"><path transform="translate(-87.806878,1221.697957) scale(0.100000,-0.100000)" d="M6956 12209 c-102 -24 -281 -133 -453 -276 -126 -104 -325 -308 -433 -443 -268 -335 -471 -748 -542 -1100 -31 -157 -32 -451 -1 -610 11 -58 20 -106 18 -108 -1 -1 -42 9 -91 23 -49 15 -133 31 -186 37 -75 9 -95 14 -88 24 24 28 60 141 60 186 0 83 -55 115 -180 106 -80 -6 -187 -60 -276 -140 -39 -36 -61 -51 -52 -36 72 112 111 188 116 225 4 37 1 46 -25 72 -42 42 -99 48 -202 22 -153 -38 -319 -145 -416 -269 -52 -65 -121 -196 -131 -247 -3 -19 -8 -35 -10 -35 -2 0 -32 23 -66 50 -87 70 -262 155 -383 187 -141 36 -318 36 -457 0 -322 -84 -641 -305 -998 -689 -507 -546 -1063 -1414 -1214 -1895 -85 -271 -91 -517 -16 -664 134 -262 609 -223 1070 86 446 300 746 690 1123 1460 174 356 188 384 184 360 -17 -81 -145 -513 -181 -610 -140 -381 -294 -640 -558 -938 -109 -124 -127 -170 -109 -279 12 -76 56 -182 97 -235 14 -19 24 -35 23 -37 -2 -1 -31 -10 -64 -20 -247 -75 -558 -273 -790 -502 -191 -189 -332 -384 -441 -609 -187 -387 -225 -726 -102 -909 13 -18 36 -51 51 -73 l28 -41 -17 -83 c-31 -153 10 -328 97 -417 61 -62 115 -86 194 -87 61 0 72 -3 88 -23 11 -12 42 -35 70 -50 46 -24 63 -27 147 -27 88 0 101 3 162 33 37 18 80 49 96 68 26 32 34 35 73 32 l43 -3 -58 -62 c-42 -46 -79 -73 -134 -100 -73 -36 -80 -38 -176 -38 -91 0 -107 3 -161 29 -50 25 -70 29 -122 27 -104 -5 -166 20 -246 101 -37 37 -74 68 -82 68 -39 0 -103 -139 -140 -309 -88 -392 -50 -752 116 -1084 72 -144 140 -238 264 -362 120 -121 234 -203 382 -275 50 -25 92 -48 92 -51 1 -4 -18 -9 -41 -13 -66 -11 -238 -71 -320 -112 -177 -89 -310 -210 -374 -339 -34 -68 -39 -90 -42 -160 -3 -67 0 -89 16 -121 63 -121 237 -195 467 -198 109 -1 123 -3 149 -23 61 -49 230 -68 516 -60 361 11 666 56 907 135 337 111 623 326 623 469 0 46 -18 90 -44 112 -32 27 -14 28 87 5 383 -87 879 -90 1297 -8 69 13 129 24 134 24 4 0 -6 -16 -22 -35 -35 -39 -48 -87 -38 -140 10 -51 119 -163 236 -240 304 -203 670 -307 1125 -322 271 -8 432 15 469 68 12 18 19 19 85 8 136 -21 339 26 437 100 26 20 58 56 71 81 22 40 24 56 21 135 -2 76 -8 100 -34 155 -98 206 -357 379 -694 463 l-55 13 110 57 c155 80 283 174 405 297 285 287 445 640 522 1150 20 132 17 545 -5 700 -71 494 -209 908 -412 1243 -19 31 -32 57 -29 57 3 0 25 -17 49 -38 137 -121 403 -99 522 44 31 36 42 43 87 49 145 19 284 140 337 292 11 32 23 93 26 135 l6 78 326 129 c441 174 470 185 476 179 3 -2 36 -98 75 -211 38 -114 77 -218 85 -231 33 -49 71 -51 208 -12 197 56 469 154 494 178 13 12 28 39 33 59 12 43 -12 123 -227 754 -58 171 -117 346 -130 390 -29 92 -73 145 -121 145 -77 0 -365 -96 -554 -184 -130 -61 -138 -90 -74 -267 55 -152 63 -184 44 -192 -148 -59 -761 -313 -782 -324 -28 -14 -30 -14 -75 30 -192 186 -620 351 -993 383 -43 3 -78 8 -78 10 0 2 18 27 41 56 55 73 154 276 181 373 29 109 32 327 4 430 -23 89 -81 214 -137 296 -59 87 -221 252 -295 301 l-60 40 -54 136 c-147 379 -303 643 -502 847 l-88 92 61 11 c72 13 110 43 289 222 510 510 742 1080 716 1755 -13 357 -93 752 -191 946 -63 124 -141 165 -259 138z M10745 6691 c-11 -5 -28 -17 -37 -27 -9 -11 -66 -145 -127 -299 -60 -154 -119 -302 -130 -328 -32 -74 -26 -106 18 -92 28 9 421 632 421 667 0 62 -80 105 -145 79z M11195 6318 c-45 -25 -588 -454 -602 -475 -17 -26 -10 -43 18 -43 43 0 679 337 704 373 33 47 12 113 -45 142 -34 18 -48 18 -75 3z M10985 5690 c-343 -35 -359 -38 -363 -67 -2 -14 3 -23 15 -27 19 -6 321 -37 550 -57 78 -6 153 -9 167 -5 67 17 91 112 41 161 -31 32 -46 31 -410 -5z M9890 5570 c-97 -12 -150 -29 -176 -55 -23 -23 -24 -30 -24 -172 0 -146 -1 -148 -19 -124 l-19 24 -43 -26 c-72 -42 -174 -132 -245 -214 -315 -369 -497 -920 -497 -1503 0 -373 73 -691 229 -989 136 -262 353 -498 587 -640 101 -62 101 -62 137 9 17 34 33 60 35 58 2 -2 -20 -77 -50 -166 l-53 -162 -3 -532 c-2 -374 0 -539 8 -553 6 -11 23 -31 38 -45 26 -25 30 -25 213 -28 212 -3 233 2 266 73 17 34 17 63 6 453 -18 632 -17 627 -79 825 -29 93 -51 170 -48 173 2 3 26 -31 51 -75 56 -98 61 -99 183 -35 145 75 274 182 395 323 273 322 413 675 449 1134 28 363 -38 796 -172 1134 -86 217 -227 447 -362 589 -83 88 -199 184 -223 184 -7 0 -20 -10 -28 -22 -15 -21 -16 -11 -16 130 0 147 -1 154 -23 176 -35 35 -148 57 -312 61 -77 2 -169 0 -205 -5z M8781 2106 c-180 -84 -311 -151 -322 -165 -18 -22 -19 -52 -19 -692 l0 -668 22 -15 c12 -9 30 -16 39 -16 19 0 1106 537 1114 550 7 11 43 357 52 495 l6 100 -89 71 c-110 88 -255 238 -364 378 -69 87 -88 106 -109 105 -14 0 -163 -64 -330 -143z M10909 2168 c-122 -157 -342 -363 -489 -459 -18 -12 -24 -25 -24 -50 1 -19 4 -150 8 -292 7 -217 11 -261 25 -276 9 -11 108 -63 221 -117 113 -53 360 -170 549 -260 189 -90 356 -164 371 -164 15 0 35 9 46 21 17 19 18 48 15 687 -1 392 -6 673 -12 684 -11 21 -592 308 -623 308 -16 0 -41 -24 -87 -82z" fill="var(--brass-hi)" fill-rule="evenodd"/></svg>`;
+/* Raised from 640/0.82 in v5.3, now that storage is a file rather than a ~5MB
+   browser quota. 1280 makes the lightbox genuinely readable instead of merely
+   indicative. It is still a reference copy, not an archive: originals are
+   re-encoded as JPEG and are not kept.
+   The remaining ceiling is save latency, not disk — every save re-encrypts the
+   whole vault, so image bytes are paid for on EVERY write, not just the one
+   that added them. Measured: ~175 KB per 1920x1080 image at these settings,
+   so ~34 MiB and ~1.8 s per save at 150 images. Going higher means moving
+   originals to per-image sidecar files. */
+const MAX_IMG_DIM=1280;    // longest edge, px — aspect ratio always preserved
+const IMG_QUALITY=0.88;    // JPEG quality 0-1
+
+const $=(s,el=document)=>el.querySelector(s);
+
+/* ============================ state ============================ */
+let db=null;                // decrypted vault contents; null until unlocked
+let sessionUnlocked=false;
+let view='library';
+let state={search:'', tagFilters:[]};
+let storageAlert=null;      // text of the persistent 'not saved' banner, or null
+/* Which rollups are open. UI state, NOT vault data — it lives in the settings
+   file, so expanding a category writes ~200 bytes instead of re-encrypting and
+   rotating the whole vault. Python owns the copy on disk; this is the mirror. */
+let expandedCats={};
+function saveExpanded(){ call('set_expanded', JSON.stringify(expandedCats)); }
+/* Display preferences (v5.5) — like expandedCats, these are UI state and live in
+   the settings file, never the vault. Toggling them must not write the vault. */
+const CARD_W_MIN=180, CARD_W_MAX=480, CARD_W_DEFAULT=230;   // px; Python clamps to the same range
+let uiPrefs={imageCards:false, cardWidth:CARD_W_DEFAULT};
+function saveUiPrefs(){ call('set_ui', JSON.stringify(uiPrefs)); }
+function applyCardWidth(){
+  const w=Math.min(CARD_W_MAX, Math.max(CARD_W_MIN, Math.round(+uiPrefs.cardWidth||CARD_W_DEFAULT)));
+  uiPrefs.cardWidth=w;
+  document.documentElement.style.setProperty('--card-w', w+'px');
+}
+let modalState={id:null, vars:[], idx:0, splits:[], msg:'', shared:{}};   // see the card modal below
+let lightboxState={items:[], index:0, cardChanged:false};          // items: [cardId, variantIndex]
+
+/* saveDB still reports whether the write actually happened — the contract the
+   browser build was fixed to honour in v3.16. It is async now because the write
+   goes to Python and on to disk; every caller awaits it. A failed save raises
+   the banner and returns false, and no caller announces success without it. */
+async function saveDB(){
+  if(!db) return false;
+  const r=await call('save', JSON.stringify(db));
+  if(r.ok){ setStorageAlert(null); return true; }
+  setStorageAlert('NOT SAVED — '+(r.error||'storage error')+'. Your changes exist only in this window. Export a backup now.');
+  return false;
+}
+function setStorageAlert(msg){
+  storageAlert=msg||null;
+  const el=document.getElementById('savealert');
+  if(!el) return;
+  if(storageAlert){ el.textContent=storageAlert; el.hidden=false; }
+  else { el.textContent=''; el.hidden=true; }
+}
+
+/* ============================ helpers ============================ */
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function uid(){ return 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2500); }
+
+/* ============================ python bridge ============================
+   Storage lives in Python (vault.py) behind pywebview's js_api. The encryption
+   key never crosses this boundary — JS holds the decrypted db in memory only.
+   Every call resolves to {ok:bool, ...}; nothing here assumes success. */
+function api(){ return (window.pywebview && window.pywebview.api) || null; }
+function apiReady(){
+  return new Promise(res=>{
+    if(api()) return res(true);
+    window.addEventListener('pywebviewready', ()=>res(true), {once:true});
+    setTimeout(()=>res(!!api()), 8000);
+  });
+}
+async function call(name, ...args){
+  const a=api();
+  if(!a) return {ok:false, error:'Desktop bridge unavailable — run this through app.py, not a browser.'};
+  try{ return await a[name](...args); }
+  catch(e){ return {ok:false, error:String(e && e.message || e)}; }
+}
+function lockNow(){ call('lock'); db=null; sessionUnlocked=false; render(); }
+
+
+/* ============================ image handling ============================ */
+// Resizes/re-encodes an uploaded image client-side before it ever touches storage:
+// long edge capped at MAX_IMG_DIM, re-encoded as JPEG at IMG_QUALITY, aspect ratio
+// preserved. A reference copy of what the prompt produced, not an archival original.
+// Images already stored at an older cap are left alone — re-upload to re-encode.
+function resizeImageFile(file, cb){
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>MAX_IMG_DIM || h>MAX_IMG_DIM){
+        if(w>=h){ h=Math.round(h*MAX_IMG_DIM/w); w=MAX_IMG_DIM; } else { w=Math.round(w*MAX_IMG_DIM/h); h=MAX_IMG_DIM; }
+      }
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb({data:canvas.toDataURL('image/jpeg', IMG_QUALITY), w, h});
+    };
+    img.onerror=()=>toast('Could not read that image');
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ---- image access ----
+   Images are plain fields on the prompt again. The whole vault file is
+   encrypted as one unit, so there is no per-prompt ciphertext and no separate
+   image store — the IndexedDB layer the browser build needed existed purely to
+   dodge a 5MB localStorage cap that does not exist on a real filesystem.
+   Kept as a function so every render path still has one accessor. */
+function imageFor(p){ return (p && p.image && p.image.data) ? p.image : null; }
+
+/* ============================ variants (v6.0) ============================
+   A card (one entry in db.prompts) holds up to MAX_VARIANTS related prompts.
+   Variant 1, the PRIMARY, lives in the card's own pre-v6 fields; variants 2..10
+   live in `p.variants`, which carry the same field names. So vAt(p,0) is the card
+   itself, a v5 vault is a valid v6 vault with no change, and the browser build
+   still reads (and shows) the primary. Category, tags and Protected belong to
+   the card. Which variant a card is SHOWING is session-only UI state (shownVar):
+   it is never written to the vault or to settings. */
+const MAX_VARIANTS=10;
+const LAYERS_ICON=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>`;
+function vCount(p){ return 1 + ((p && Array.isArray(p.variants)) ? p.variants.length : 0); }
+function vAt(p,i){ return (i>0 && p && Array.isArray(p.variants) && p.variants[i-1]) ? p.variants[i-1] : p; }
+function variantName(p,i){ const v=vAt(p,i); return (v && v.label) || (i===0 ? 'Main' : 'Variant '+(i+1)); }
+let shownVar={};
+function shownIdx(p){ const i=shownVar[p.id]|0; return (i>=0 && i<vCount(p)) ? i : 0; }
+function variantHay(v){ return ((v.promptText||'')+' '+(v.negativePrompt||'')+' '+(v.seed||'')+' '+(v.comments||'')+' '+(v.label||'')).toLowerCase(); }
+function variantsMatching(p,q){ const out=[]; for(let i=0;i<vCount(p);i++) if(variantHay(vAt(p,i)).includes(q)) out.push(i); return out; }
+function promptTotal(list){ return list.reduce((a,p)=>a+vCount(p), 0); }
+function cardsText(list, suffix=''){
+  const c=list.length, t=promptTotal(list);
+  return t>c ? `${c} card${c===1?'':'s'} · ${t} prompts${suffix}` : `${c} prompt${c===1?'':'s'}${suffix}`;
+}
+// Card thumbnail navigation: targeted DOM write of that one card, never the vault.
+function refreshCard(id){
+  const p=db && db.prompts.find(x=>x.id===id);
+  document.querySelectorAll('#rollups [id="card-'+id+'"]').forEach(el=>{ if(p) el.outerHTML=cardHTML(p); });
+}
+function cardVarSet(id,i){
+  const p=db.prompts.find(x=>x.id===id); if(!p) return;
+  const n=vCount(p); shownVar[id]=((i%n)+n)%n; refreshCard(id);
+}
+function cardVarStep(id,d){ const p=db.prompts.find(x=>x.id===id); if(p) cardVarSet(id, shownIdx(p)+d); }
+
+/* ---- drag a card onto another to make it a variant (v6.1) ----
+   Only the grip in the thumbnail's top-left corner is draggable (the image itself
+   stays a click-to-zoom target). Native HTML5 drag and drop, like the category
+   reorder; rollups ignore drags while dragCardId is set. A drop never writes by
+   itself: it opens a confirm dialog (openMergeModal) and only Confirm saves. A
+   target that cannot take all of the source's prompts (MAX_VARIANTS) refuses the
+   drop (dropEffect none) and shows why. */
+let dragCardId=null;
+function canMerge(srcId, tgtId){
+  if(!db || !srcId || srcId===tgtId) return false;
+  const s=db.prompts.find(x=>x.id===srcId), t=db.prompts.find(x=>x.id===tgtId);
+  return !!(s && t && vCount(s)+vCount(t)<=MAX_VARIANTS);
+}
+function clearDropMarks(){ document.querySelectorAll('.pcard.drop-ok,.pcard.drop-full').forEach(el=>el.classList.remove('drop-ok','drop-full')); }
+function onCardDragStart(e, id){
+  e.stopPropagation();
+  dragCardId=id;
+  try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('application/x-promptvault-card', id); e.dataTransfer.setData('text/plain', ''); }catch(_){}
+  const el=document.getElementById('card-'+id);
+  if(el){ try{ e.dataTransfer.setDragImage(el, 24, 24); }catch(_){} setTimeout(()=>el.classList.add('dragging'), 0); }
+}
+function onCardDragEnd(){
+  dragCardId=null; clearDropMarks();
+  document.querySelectorAll('.pcard.dragging').forEach(el=>el.classList.remove('dragging'));
+}
+function onCardDragOver(e, id){
+  if(!dragCardId || dragCardId===id) return;
+  e.stopPropagation();
+  const el=document.getElementById('card-'+id);
+  const fits=canMerge(dragCardId, id);
+  if(fits){ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){} }
+  else { try{ e.dataTransfer.dropEffect='none'; }catch(_){} }
+  if(el && !el.classList.contains(fits?'drop-ok':'drop-full')){ clearDropMarks(); el.classList.add(fits?'drop-ok':'drop-full'); }
+}
+// Chromium fires dragleave on child transitions, often with relatedTarget null, so
+// the mark is only dropped once the pointer is really outside the card's box.
+function onCardDragLeave(e, id){
+  const el=document.getElementById('card-'+id); if(!el) return;
+  if(e.relatedTarget && el.contains(e.relatedTarget)) return;
+  const r=el.getBoundingClientRect(), x=e.clientX, y=e.clientY;
+  if(x>r.left && x<r.right && y>r.top && y<r.bottom) return;
+  el.classList.remove('drop-ok','drop-full');
+}
+function onCardDrop(e, id){
+  e.preventDefault(); e.stopPropagation();
+  const src=dragCardId;
+  onCardDragEnd();
+  if(canMerge(src, id)) openMergeModal(src, id);
+}
+let mergeState=null;
+function cardSnippet(p){ const t=(p.promptText||'').trim(); return t.length>90 ? t.slice(0,90)+'…' : t; }
+function openMergeModal(srcId, tgtId){
+  const s=db.prompts.find(x=>x.id===srcId), t=db.prompts.find(x=>x.id===tgtId);
+  if(!s || !t) return;
+  const ns=vCount(s), nt=vCount(t);
+  if(ns+nt>MAX_VARIANTS) return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts`);
+  mergeState={srcId, tgtId};
+  const thumb=(im,cls)=>im ? `<img src="${im.data}" alt="">` : `<div class="mf-empty"></div>`;
+  const newTags=(s.tags||[]).filter(x=>!(t.tags||[]).includes(x));
+  const catName=id=>id ? ((db.libCategories.find(c=>c.id===id)||{}).name||'Uncategorized') : 'Uncategorized';
+  const rows=Array.from({length:ns},(_,j)=>{ const v=vAt(s,j);
+    return `<div class="mergerow">${thumb(imageFor(v))}<b>Variant ${nt+j+1}</b><input id="mg_name_${j}" placeholder="Name (optional)" onkeydown="if(event.key==='Enter')confirmMerge()" value="${esc(v.label||'')}" aria-label="Name for variant ${nt+j+1} (optional)"></div>`; }).join('');
+  const notes=[];
+  if((s.categoryId||null)!==(t.categoryId||null)) notes.push(`It moves from ${esc(catName(s.categoryId))} to ${esc(catName(t.categoryId))}.`);
+  if(s.nsfw && !t.nsfw) notes.push('The card becomes Protected, because the prompt you are moving is.');
+  $('#modalRoot').innerHTML=`
+  <div class="scrim" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:min(520px,96vw)">
+      <div class="mh"><h3>Add as ${ns>1?'variants':'a variant'}?</h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
+      <div class="mergeflow">${thumb(imageFor(s))}<div class="mf-txt">${esc(cardSnippet(s))}</div><span class="mf-arrow" aria-hidden="true">→</span>${thumb(imageFor(t))}<div class="mf-txt">${esc(cardSnippet(t))}</div></div>
+      <div class="sub" style="margin:6px 0 2px">${ns>1?`All ${ns} prompts on this card`:'This prompt'} will be added to the other card as ${ns>1?`variants ${nt+1}–${nt+ns}`:`variant ${nt+1}`}, and ${ns>1?'their card':'its card'} will be removed from the Library. Text, image, seed, size and notes all go with ${ns>1?'them':'it'}.</div>
+      <label class="fld">${ns>1?'Variant names':'Variant name'} <span style="color:var(--faint);font-weight:500">(optional)</span></label>
+      <div class="mergerows">${rows}</div>
+      ${newTags.length?`<div class="checkline"><input id="mg_tags" type="checkbox" checked><label for="mg_tags" style="margin:0;font-size:13px">Also add its tags to the card: ${newTags.map(x=>`<span class="tag">${esc(x)}</span>`).join(' ')}</label></div>`:''}
+      ${notes.length?`<div class="mergenote">${notes.join('<br>')}</div>`:''}
+      <div class="foot">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" id="mg_ok" onclick="confirmMerge()">Add as ${ns>1?`${ns} variants`:'variant'}</button>
+      </div>
+    </div>
+  </div>`;
+  const f=$('#mg_name_0'); if(f){ f.focus(); f.select(); }
+}
+async function confirmMerge(){
+  const st=mergeState; if(!st) return;
+  const s=db.prompts.find(x=>x.id===st.srcId), t=db.prompts.find(x=>x.id===st.tgtId);
+  if(!s || !t){ closeModal(); return; }
+  const ns=vCount(s), nt=vCount(t);
+  if(ns+nt>MAX_VARIANTS){ closeModal(); return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts`); }
+  const now=new Date().toISOString();
+  const tagBox=$('#mg_tags');
+  const incoming=Array.from({length:ns},(_,j)=>{
+    const v=vAt(s,j), el=document.getElementById('mg_name_'+j);
+    const o={ id: (j>0 && v.id) ? v.id : 'v'+uid().slice(1), createdAt: (j>0 ? v.createdAt : s.createdAt) || now,
+      label:(el ? el.value : (v.label||'')).trim(), promptText:v.promptText||'', negativePrompt:v.negativePrompt||'',
+      seed:v.seed||'', width:v.width||null, height:v.height||null, comments:v.comments||'', image:imageFor(v) };
+    if(!o.label) delete o.label;
+    return o;
+  });
+  t.variants=(Array.isArray(t.variants)?t.variants:[]).concat(incoming);
+  if(tagBox && tagBox.checked){ const set=new Set(t.tags||[]); for(const x of (s.tags||[])) set.add(x); t.tags=[...set]; }
+  if(s.nsfw) t.nsfw=true;
+  t.updatedAt=now;
+  db.prompts=db.prompts.filter(x=>x.id!==s.id);
+  delete shownVar[s.id];
+  shownVar[t.id]=nt;            // show the first prompt that just arrived
+  mergeState=null;
+  const ok=await saveDB();
+  closeModal(); render();
+  if(ok) toast(ns>1 ? `Added as variants ${nt+1}–${nt+ns}` : `Added as variant ${nt+1}`);
+}
+
+
+/* ============================ navigation ============================ */
+const NAV=[
+  ['library','Library','M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'],
+  ['data','Data &amp; Security','M6 10V7a6 6 0 1112 0v3M5 10h14v10H5z']
+];
+function icon(d){return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;}
+function go(v){ view=v; render(); window.scrollTo(0,0); }
+
+/* ============================ render router ============================ */
+/* The app opens into the PIN gate, not the Library: with the whole vault
+   encrypted there is nothing to show until it is unlocked. render() is the one
+   place that decides which of the two states we are in. */
+function render(){
+  const locked = !db || !sessionUnlocked;
+  document.querySelector('.app').style.display = locked ? 'none' : '';
+  const root = document.getElementById('gateRoot');
+  if(locked){
+    root.hidden=false;
+    root.innerHTML = gateHTML(vaultExists ? 'unlock' : 'create', '');
+    const gp=document.getElementById('gatePath'); if(gp) gp.textContent=vaultPath;
+    const f=document.getElementById('gatePin'); if(f) f.focus();
+    return;
+  }
+  root.hidden=true; root.innerHTML='';
+  renderNav();
+  $('#main').classList.toggle('narrow', view!=='library');
+  $('#main').innerHTML = view==='library' ? viewLibrary() : viewData();
+  if(view==='data'){ refreshStoredNow(); refreshCardPreview(); }   // async: vault figures come from Python
+}
+function renderNav(){
+  $('#nav').innerHTML=NAV.map(([id,label,d])=>`<button class="${id===view?'on':''}" onclick="go('${id}')">${icon(d)}<span>${label}</span></button>`).join('');
+  $('#railver').innerHTML=`<b>v${APP_VERSION}</b> · ${APP_BUILD}`;
+  renderLockbox();
+}
+function renderLockbox(){
+  const el=$('#lockbox'); if(!el) return;
+  el.innerHTML=`<div class="lockbox"><div class="st">🔓 Vault open</div>
+    <button onclick="lockNow()">Lock now</button></div>`;
+}
+
+/* ---------- Library ---------- */
+function allTags(){
+  const set=new Set();
+  for(const p of db.prompts){ const c=p; if(c) (c.tags||[]).forEach(t=>set.add(t)); }
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function visibleList(){
+  const q=(state.search||'').trim().toLowerCase();
+  const tagFilters=state.tagFilters;
+  return db.prompts.filter(p=>{
+    const c=p;
+    if(tagFilters.length && !tagFilters.every(t=>(c.tags||[]).includes(t))) return false;
+    if(q){
+      // v6.0: a card matches if its tags or ANY of its variants match
+      const tagHay=(c.tags||[]).join(' ').toLowerCase();
+      if(!tagHay.includes(q) && !variantsMatching(p,q).length) return false;
+    }
+    return true;
+  }).sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
+}
+function libCountText(){
+  const nsfwCount=db.prompts.filter(p=>p.nsfw).length;
+  return cardsText(db.prompts, ' saved')+(nsfwCount?` · ${nsfwCount} marked Protected`:'');
+}
+// Tag chips are cumulative: each click adds (or removes) that tag as an extra AND
+// condition alongside the search box and any other selected chips, rather than
+// swapping which single tag is active.
+function chipsHTML(){
+  const tagFilters=state.tagFilters;
+  const tags=allTags();
+  return ['<button class="chip '+(!tagFilters.length?'on':'')+'" onclick="clearTagFilters()">All</button>']
+    .concat(tags.map(t=>`<button class="chip ${tagFilters.includes(t)?'on':''}" onclick="toggleTagFilter('${esc(t)}')">${esc(t)}</button>`)).join('');
+}
+function rollupPreviewHTML(prompts){
+  const imgs=prompts.map(p=>{ const im=imageFor(p); return im?im.data:null; }).filter(Boolean).slice(0,4);
+  if(!imgs.length) return '';
+  return `<div style="display:flex;gap:4px">${imgs.map(src=>`<img src="${src}" style="width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line)">`).join('')}</div>`;
+}
+const GRIP_ICON=`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.7"/><circle cx="16" cy="6" r="1.7"/><circle cx="8" cy="12" r="1.7"/><circle cx="16" cy="12" r="1.7"/><circle cx="8" cy="18" r="1.7"/><circle cx="16" cy="18" r="1.7"/></svg>`;
+let dragCatId=null;
+// Native HTML5 drag/drop: only the grip handle is draggable (not the whole card,
+// so clicking the header still just expands/collapses), and only real categories
+// take part — Uncategorized always sits last and isn't reorderable. The order lives
+// in db.libCategories itself, so it round-trips through both backup types for free —
+// no separate "position" field needed, since JSON preserves array order.
+function onRollupDragStart(e, catId){
+  dragCatId=catId;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain', catId);
+  const el=e.target.closest('.rollup'); if(el) el.classList.add('dragging');
+}
+function onRollupDragEnd(){
+  document.querySelectorAll('.rollup.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.rollup.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  dragCatId=null;
+}
+function onRollupDrop(e, targetCatId){
+  e.preventDefault();
+  const sourceCatId=dragCatId || e.dataTransfer.getData('text/plain');
+  if(!sourceCatId || sourceCatId===targetCatId) return;
+  const fromIdx=db.libCategories.findIndex(c=>c.id===sourceCatId);
+  let toIdx=db.libCategories.findIndex(c=>c.id===targetCatId);
+  if(fromIdx<0 || toIdx<0) return;
+  const [moved]=db.libCategories.splice(fromIdx,1);
+  if(fromIdx<toIdx) toIdx--; // target shifted left after the source was removed
+  db.libCategories.splice(toIdx,0,moved);
+  saveDB(); render();
+}
+function rollupCardHTML(key, name, prompts, filtering, isUncat){
+  const expanded=filtering ? true : (expandedCats[key]===true);
+  const preview=expanded ? '' : rollupPreviewHTML(prompts);
+  const dragAttrs=!isUncat?`ondragover="if(dragCardId)return; event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over'); if(dragCardId)return; onRollupDrop(event,'${key}')"`:'';   // a CARD being dragged (v6.1) is not a category reorder
+  const handle=!isUncat?`<span class="drag-handle" draggable="true" onclick="event.stopPropagation()" ondragstart="onRollupDragStart(event,'${key}')" ondragend="onRollupDragEnd()" title="Drag to reorder">${GRIP_ICON}</span>`:`<span class="drag-handle-spacer"></span>`;
+  return `<div id="rollup-${key}" class="rollup ${expanded?'open':''}" ${dragAttrs}>
+    <div class="rollup-head" onclick="toggleCategoryRollup('${key}')">
+      <div class="rtitle">${handle}<svg class="rollup-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>${esc(name)}<span class="rcount">· ${cardsText(prompts)}</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${preview}
+        ${!isUncat?`<div class="rollup-actions" onclick="event.stopPropagation()">
+          <button class="iconbtn" title="Rename" onclick="renameLibCategory('${key}')" style="color:var(--faint)">✎</button>
+          <button class="iconbtn" title="Delete category" onclick="deleteLibCategoryConfirm('${key}')">✕</button>
+        </div>`:''}
+      </div>
+    </div>
+    ${expanded?`<div class="rollup-body"><div class="promptgrid${uiPrefs.imageCards?' imgcards':''}">${prompts.length?prompts.map(cardHTML).join(''):'<div class="empty" style="padding:20px 0">No prompts here yet.</div>'}</div></div>`:''}
+  </div>`;
+}
+// Category rollups are built from the same filtered/sorted list the old flat grid used —
+// filtering (search or a tag chip) forces every category with a hit open and hides the
+// rest, so browsing a category never requires a second, separate search mechanism.
+function rollupsHTML(){
+  const list=visibleList();
+  const filtering=!!(state.search && state.search.trim()) || state.tagFilters.length>0;
+  const byCat={};
+  const q=(state.search||'').trim().toLowerCase();
+  for(const p of list){
+    const key=p.categoryId||'__uncat__'; (byCat[key]=byCat[key]||[]).push(p);
+    // searching: if the variant on show is not a hit, show the first one that is
+    if(q && vCount(p)>1){ const hits=variantsMatching(p,q); if(hits.length && !hits.includes(shownIdx(p))) shownVar[p.id]=hits[0]; }
+  }
+  let html='';
+  for(const cat of db.libCategories){
+    const prompts=byCat[cat.id]||[];
+    if(filtering && !prompts.length) continue;
+    html+=rollupCardHTML(cat.id, cat.name, prompts, filtering, false);
+  }
+  const uncat=byCat['__uncat__']||[];
+  if(!filtering || uncat.length) html+=rollupCardHTML('__uncat__', 'Uncategorized', uncat, filtering, true);
+  return html || `<div class="empty">No prompts match. Try clearing filters, or add a new one.</div>`;
+}
+function toggleCategoryRollup(key){
+  expandedCats[key]=!(expandedCats[key]===true);
+  saveExpanded();            // settings only — browsing must not write the vault
+  refreshLibrary();
+}
+// Used by the category chips (in the sticky header) to open + scroll to a rollup.
+// Height is measured live rather than hard-coded, since the sticky header's own
+// height changes as tag/category chips wrap onto more or fewer lines.
+function jumpToCategoryRollup(key){
+  const nowExpanded=!(expandedCats[key]===true);
+  expandedCats[key]=nowExpanded;
+  saveExpanded();
+  refreshLibrary();
+  if(nowExpanded){
+    requestAnimationFrame(()=>{
+      const el=document.getElementById('rollup-'+key);
+      if(!el) return;
+      const header=document.querySelector('.libheader');
+      const headerH=header ? header.getBoundingClientRect().height : 0;
+      const y=el.getBoundingClientRect().top + window.scrollY - headerH - 12;
+      window.scrollTo({top:Math.max(0,y), behavior:'smooth'});
+    });
+  }
+}
+function collapseAllCategories(){
+  for(const cat of db.libCategories) expandedCats[cat.id]=false;
+  expandedCats['__uncat__']=false;
+  saveExpanded();
+  refreshLibrary();
+  toast('All categories collapsed');
+}
+function addLibCategory(){
+  const input=$('#newLibCatName'); const name=(input.value||'').trim();
+  if(!name) return toast('Enter a category name');
+  if(db.libCategories.some(c=>c.name.toLowerCase()===name.toLowerCase())) return toast('That category already exists');
+  db.libCategories.push({id:uid(), name});
+  saveDB(); render();
+}
+function renameLibCategory(id){
+  const c=db.libCategories.find(x=>x.id===id); if(!c) return;
+  const name=window.prompt('Rename category', c.name);
+  if(name===null) return;
+  const trimmed=name.trim(); if(!trimmed) return;
+  c.name=trimmed; saveDB(); render();
+}
+function deleteLibCategoryConfirm(id){
+  if(!confirm('Delete this category? Prompts inside it move to Uncategorized — nothing about the prompts themselves changes.')) return;
+  db.libCategories=db.libCategories.filter(c=>c.id!==id);
+  for(const p of db.prompts){ if(p.categoryId===id) p.categoryId=null; }
+  delete expandedCats[id]; saveExpanded();
+  saveDB(); render();
+}
+function libCategoryChipsHTML(){
+  if(!db.libCategories.length) return `<span class="sub" style="margin:0">No categories yet — add one above.</span>`;
+  const chips=db.libCategories.map(c=>`<span class="chip" style="display:inline-flex;align-items:center;gap:6px"><a href="javascript:void(0)" onclick="jumpToCategoryRollup('${c.id}')" style="color:inherit;text-decoration:none" title="Jump to this category">${esc(c.name)}</a><a href="javascript:void(0)" onclick="renameLibCategory('${c.id}')" style="color:var(--muted);text-decoration:none" title="Rename">✎</a><a href="javascript:void(0)" onclick="deleteLibCategoryConfirm('${c.id}')" style="color:var(--loss);text-decoration:none" title="Delete">✕</a></span>`).join('');
+  return chips+`<button class="btn sm ghost" onclick="collapseAllCategories()">Roll up all</button>`;
+}
+function cardCategorySelectHTML(p){
+  return `<select class="cardcat" title="Category" onchange="onCardCategoryChange('${p.id}', this.value)">
+    <option value="">Uncategorized</option>
+    ${db.libCategories.map(c=>`<option value="${esc(c.id)}" ${p.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+  </select>`;
+}
+// v5.8: awaits the save and toasts only when it landed (honest-save contract).
+async function onCardCategoryChange(id, value){
+  const p=db.prompts.find(x=>x.id===id); if(!p) return;
+  p.categoryId=value||null;
+  const catName=value ? ((db.libCategories.find(c=>c.id===value)||{}).name) : 'Uncategorized';
+  const ok=await saveDB(); render();
+  if(ok) toast(`Moved to ${catName||'Uncategorized'}`);
+}
+function gcd(a,b){ return b===0 ? a : gcd(b, a%b); }
+function aspectRatioLabel(w,h){
+  if(!w || !h) return '';
+  const g=gcd(w,h)||1;
+  return `${w/g}:${h/g}`;
+}
+/* Nearest whole-number ratio of an image (v5.5). The stored image is a resized
+   copy, so its pixel ratio is usually a hair off the generation size — 1280x731
+   rather than 16:9. Searches small terms first and takes the first within 0.2%
+   (resize rounding at a 1280 edge stays under 0.1%, while 0.5% would read 13:19
+   SDXL portraits as 11:16),
+   so the hint reads as the ratio that was actually chosen (16:9, 2:3, 7:9), not
+   the raw reduced fraction. Marked ≈ when it is not exact. */
+function nearestRatio(w,h){
+  w=+w; h=+h;
+  if(!(w>0) || !(h>0)) return '';
+  const R=Math.max(w,h)/Math.min(w,h);
+  let best=null;
+  for(let n=1;n<=24;n++){
+    const m=Math.round(n*R), err=Math.abs(m/n-R)/R;
+    if(!best || err<best.err-1e-12) best={n,m,err};
+    if(err<=0.002){ best={n,m,err}; break; }
+  }
+  const g=gcd(best.m,best.n)||1, M=best.m/g, N=best.n/g;
+  const txt = w>=h ? `${M}:${N}` : `${N}:${M}`;
+  return (best.err<1e-9 ? '' : '≈ ')+txt;
+}
+function imageRatioTag(im){
+  if(!im || !im.w || !im.h) return '';
+  return `<span class="ratiotag" title="Image ratio, rounded to whole numbers — a hint at the generation size used. Stored copy is ${im.w}×${im.h}px.">${nearestRatio(im.w, im.h)}</span>`;
+}
+function updateWHRatio(){
+  const el=$('#wh_ratio'); if(!el) return;
+  const w=parseInt($('#f_width').value,10), h=parseInt($('#f_height').value,10);
+  const r=aspectRatioLabel(w,h);
+  el.textContent=r ? `Ratio: ${r}` : '';
+}
+function cardHTML(p){
+  const n=vCount(p), multi=n>1, i=shownIdx(p), v=vAt(p,i);
+  const im=imageFor(v);
+  const img=im ? `<img class="thumb" src="${im.data}" style="cursor:zoom-in" title="Click to view full size" onclick="openImageLightbox('${p.id}',${i})">` : `<div class="thumb-empty">no image</div>`;
+  const nav=multi ? `<div class="vbadge">${LAYERS_ICON}${i+1} / ${n}</div>
+      <button class="vnav left" onclick="cardVarStep('${p.id}',-1)" title="Previous variant" aria-label="Previous variant">‹</button>
+      <button class="vnav right" onclick="cardVarStep('${p.id}',1)" title="Next variant" aria-label="Next variant">›</button>
+      <div class="vdots">${Array.from({length:n},(_,j)=>`<button class="${j===i?'on':''}" onclick="cardVarSet('${p.id}',${j})" title="${j+1} · ${esc(variantName(p,j))}" aria-label="Show variant ${j+1}"></button>`).join('')}</div>` : '';
+  const tagChips=(p.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+  const comments=(v.comments||'').trim();
+  const seed=(v.seed||'').trim();
+  const ratio=aspectRatioLabel(v.width, v.height);
+  return `<div class="pcard${multi?' multi':''}" id="card-${p.id}" ondragenter="onCardDragOver(event,'${p.id}')" ondragover="onCardDragOver(event,'${p.id}')" ondragleave="onCardDragLeave(event,'${p.id}')" ondrop="onCardDrop(event,'${p.id}')">
+    <div class="tw">${img}${nav}<span class="vgrip" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragend="onCardDragEnd()" title="Drag onto another card to add it there as a variant" aria-label="Drag to another card">${GRIP_ICON}</span></div>
+    <div class="body">
+      ${multi?`<div class="vlabel"><b>V${i+1} of ${n}${v.label?' · '+esc(v.label):''}</b>${i===0?'<span class="vprim">Primary</span>':''}</div>`:''}
+      ${p.nsfw?'<span class="pill nsfw">Protected</span>':''}
+      <div class="ptext">${esc(v.promptText)}</div>
+      ${comments?`<div class="pcomments">📝 ${esc(comments)}</div>`:''}
+      ${seed?`<div class="pseed">Seed: <code>${esc(seed)}</code></div>`:''}
+      ${ratio?`<div class="pseed">Size: <code>${v.width}×${v.height}</code> · <code>${ratio}</code></div>`:''}
+      <div class="tagrow">${tagChips}</div>
+    </div>
+    <div class="foot">
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn sm brass" onclick="copyPrompt('${p.id}',${i})" title="${multi?`Copy variant ${i+1}'s positive prompt`:'Copy the positive prompt'}">Copy</button>
+        ${cardCategorySelectHTML(p)}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm ghost" onclick="openPromptModal('${p.id}',${i})">Edit</button>
+        <button class="iconbtn" title="${multi?'Delete card':'Delete'}" aria-label="${multi?'Delete card':'Delete'}" onclick="deletePromptConfirm('${p.id}')">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+function viewLibrary(){
+  return `
+  <div class="libheader">
+    <div class="pagehead">
+      <div><div class="eyebrow">Prompt Vault · Library</div><h1>Library</h1>
+        <div class="sub" id="libcount">${libCountText()}</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="libsize" title="Card size — the minimum card width; cards stretch to fill each row. Also on Data &amp; Security &gt; Display.">
+          <span class="rowlabel">Card size</span>
+          <input id="libCardWidth" type="range" min="${CARD_W_MIN}" max="${CARD_W_MAX}" step="10" value="${uiPrefs.cardWidth}"
+                 oninput="onCardWidthInput(this.value)" onchange="onCardWidthCommit()" ondblclick="resetCardWidth()">
+          <span class="num" id="libCardWidthVal">${uiPrefs.cardWidth} px</span>
+        </div>
+        <button class="btn ghost" id="imgCardsBtn" onclick="toggleImageCards()" title="Hide the prompt text on cards and enlarge the thumbnails into that space">${uiPrefs.imageCards?'Show prompt text':'Hide prompt text'}</button>
+        <button class="btn ghost" onclick="collapseAllCategories()">Collapse all</button>
+        <button class="btn brass" onclick="openPromptModal()">+ Add prompt</button>
+      </div>
+    </div>
+    <div class="searchrow"><input type="text" id="searchbox" placeholder="Search prompts, tags, notes..." value="${esc(state.search)}" oninput="setSearch(this.value)"></div>
+    <div class="catmgmt">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span class="rowlabel">Categories</span>
+        <input id="newLibCatName" placeholder="New category, e.g. Portraits" style="flex:1;max-width:220px" onkeydown="if(event.key==='Enter')addLibCategory()">
+        <button class="btn sm" onclick="addLibCategory()">+ Add</button>
+      </div>
+      <div class="chiprow" id="catchips" style="margin-bottom:2px">${libCategoryChipsHTML()}</div>
+    </div>
+    <div class="rowlabel" style="margin-top:10px">Filter by tag</div>
+    <div class="chiprow" id="chiprow">${chipsHTML()}</div>
+  </div>
+  <div id="rollups">${rollupsHTML()}</div>`;
+}
+function refreshLibrary(){
+  if(view!=='library') return;
+  const c=$('#chiprow'); if(c) c.innerHTML=chipsHTML();
+  const cc=$('#catchips'); if(cc) cc.innerHTML=libCategoryChipsHTML();
+  const r=$('#rollups'); if(r) r.innerHTML=rollupsHTML();
+  const lc=$('#libcount'); if(lc) lc.textContent=libCountText();
+}
+function setSearch(v){ state.search=v; refreshLibrary(); }
+function toggleImageCards(){
+  uiPrefs.imageCards=!uiPrefs.imageCards;
+  saveUiPrefs();             // settings only — a display choice must not write the vault
+  const b=$('#imgCardsBtn'); if(b) b.textContent=uiPrefs.imageCards?'Show prompt text':'Hide prompt text';
+  refreshLibrary();
+}
+function toggleTagFilter(t){
+  const i=state.tagFilters.indexOf(t);
+  if(i===-1) state.tagFilters.push(t); else state.tagFilters.splice(i,1);
+  refreshLibrary();
+}
+function clearTagFilters(){ state.tagFilters=[]; refreshLibrary(); }
+
+/* ---------- Display settings (v5.6) ----------
+   Card size is a minimum card width fed to the Library grid as --card-w. The
+   preview beside the slider is drawn at the width a card will REALLY get in the
+   Library at the current window size — not the slider value, since 1fr stretches
+   columns to fill the row. The Library's grid width is derived from the layout
+   (window minus rail, main padding and rollup padding) because the Library is not
+   on screen while this is open. The slider updates the preview by targeted DOM
+   writes while dragging (a full render would steal the slider's focus) and saves
+   once, on release. */
+const LIB_GRID_INSET=30*2 + 16*2 + 2;    // .main side padding + .rollup-body padding + rollup border
+const CARD_GAP=16;
+function libraryGridWidth(){
+  const app=document.querySelector('.app'), rail=document.querySelector('.rail');
+  const appW=app ? app.clientWidth : 0;
+  // under 900px the rail becomes a top bar and .main padding drops to 16px (see @media)
+  const wide=window.innerWidth>900;
+  const railW=wide && rail ? rail.offsetWidth : 0;
+  const inset=wide ? LIB_GRID_INSET : 16*2 + 16*2 + 2;
+  return Math.max(0, appW - railW - inset);
+}
+function cardLayoutFor(minW){
+  const G=libraryGridWidth();
+  if(!G) return {cols:1, width:minW};
+  const cols=Math.max(1, Math.floor((G+CARD_GAP)/(minW+CARD_GAP)));
+  const width=cols===1 ? G : (G - CARD_GAP*(cols-1))/cols;
+  return {cols, width:Math.floor(width)};
+}
+function previewPrompt(){
+  return db.prompts.find(p=>imageFor(p)) || db.prompts[0] || {
+    id:'__preview__', promptText:'A weathered lighthouse at dusk, cinematic lighting, volumetric fog, ultra-detailed, wide shot',
+    comments:'Example card — add a prompt to preview your own.', seed:'1847293650', width:1344, height:768,
+    tags:['example'], image:null, categoryId:null, nsfw:false };
+}
+function displaySettingsHTML(){
+  const w=uiPrefs.cardWidth;
+  return `<div class="dispgrid">
+    <div>
+      <label class="fld" for="cardWidthRange" style="margin-top:0">Prompt card size</label>
+      <input id="cardWidthRange" type="range" min="${CARD_W_MIN}" max="${CARD_W_MAX}" step="10" value="${w}"
+             oninput="onCardWidthInput(this.value)" onchange="onCardWidthCommit()">
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint)"><span>Smaller</span><span>Larger</span></div>
+      <div class="kv" style="margin-top:12px;grid-template-columns:130px 1fr">
+        <div>Minimum width</div><div class="num" id="cwMin">${w} px</div>
+        <div>Actual width</div><div class="num" id="cwActual">…</div>
+        <div>Cards per row</div><div class="num" id="cwCols">…</div>
+      </div>
+      <div class="checkline"><input id="dispImgCards" type="checkbox" ${uiPrefs.imageCards?'checked':''} onchange="setImageCards(this.checked)"><label for="dispImgCards" style="margin:0;font-size:13px">Hide prompt text on cards</label></div>
+      <div class="sub" style="margin:4px 0 12px">The preview is shown at real size (1:1) — the width a card gets in the Library at this window size. Resize or maximise the window and it follows.</div>
+      <button class="btn sm ghost" onclick="resetCardWidth()">Reset to ${CARD_W_DEFAULT} px</button>
+    </div>
+    <div class="cardpreview" id="cardPreview"></div>
+  </div>`;
+}
+function refreshCardPreview(){
+  const box=$('#cardPreview'); if(!box) return;
+  const {cols, width}=cardLayoutFor(uiPrefs.cardWidth);
+  box.innerHTML=`<div class="promptgrid${uiPrefs.imageCards?' imgcards':''}"><div style="width:${width}px">${cardHTML(previewPrompt())}</div></div>`;
+  const a=$('#cwActual'); if(a) a.textContent=width+' px';
+  const c=$('#cwCols'); if(c) c.textContent=cols+' across (current window)';
+  const m=$('#cwMin'); if(m) m.textContent=uiPrefs.cardWidth+' px';
+}
+/* Shared by both sliders (Library header and Data > Display). The Library needs no
+   re-render while dragging: the grid reads --card-w, so changing the variable
+   reflows the cards in place and the slider keeps focus. */
+function onCardWidthInput(v){
+  uiPrefs.cardWidth=+v; applyCardWidth();
+  const lv=$('#libCardWidthVal'); if(lv) lv.textContent=uiPrefs.cardWidth+' px';
+  refreshCardPreview();
+}
+function onCardWidthCommit(){ saveUiPrefs(); }   // settings only — never the vault
+function resetCardWidth(){
+  uiPrefs.cardWidth=CARD_W_DEFAULT; applyCardWidth(); saveUiPrefs();
+  const r=$('#cardWidthRange'); if(r) r.value=CARD_W_DEFAULT;
+  const lr=$('#libCardWidth'); if(lr) lr.value=CARD_W_DEFAULT;
+  const lv=$('#libCardWidthVal'); if(lv) lv.textContent=CARD_W_DEFAULT+' px';
+  refreshCardPreview();
+}
+function setImageCards(on){
+  uiPrefs.imageCards=!!on; saveUiPrefs();
+  refreshCardPreview();
+}
+window.addEventListener('resize', ()=>{ if(view==='data') refreshCardPreview(); });
+
+/* ---------- Data & Security ---------- */
+/* "Stored now" — a plain statement of what is actually on disk, which is the thing
+   this app got wrong for a long time: it rendered from memory and never said whether
+   the write landed. The localStorage figure is read back OUT of storage rather than
+   computed from `db`, so it reflects what a reload would really find.
+   Image-store figures need an async IndexedDB pass, so viewData() renders the row set
+   with stats=null (placeholder) and refreshStoredNow() patches the container after —
+   the same targeted-DOM-write pattern the search box uses. */
+function fmtBytes(chars){
+  if(chars==null) return '—';
+  if(chars<1024) return chars+' B';
+  if(chars<1024*1024) return (chars/1024).toFixed(1)+' KB';
+  return (chars/(1024*1024)).toFixed(2)+' MB';
+}
+function storedNowHTML(stats){
+  const protCount=db.prompts.filter(p=>p.nsfw).length;
+  const catCount=(db.libCategories||[]).length;
+  let imgCount=0; for(const p of db.prompts) for(let j=0;j<vCount(p);j++) if(imageFor(vAt(p,j))) imgCount++;
+  const total=promptTotal(db.prompts);
+  const inMem=JSON.stringify(db).length;
+  const g=stats&&stats.generations||[];
+  const st=(stats&&stats.settings)||{};
+  return `<div class="kv" style="margin-top:10px">
+    <div>Prompts</div><div class="num">${total}${total>db.prompts.length?` on ${db.prompts.length} cards`:''}</div>
+    <div>Protected</div><div class="num">${protCount}</div>
+    <div>Categories</div><div class="num">${catCount}</div>
+    <div>Reference images</div><div class="num">${imgCount}</div>
+    <div>Vault file</div><div class="num">${stats?fmtBytes(stats.bytes)+' encrypted on disk':'…'}</div>
+    <div>Last written</div><div class="num">${stats&&stats.mtime?esc(stats.mtime):'…'}</div>
+    <div>In memory</div><div class="num">${fmtBytes(inMem)} decrypted</div>
+    <div>Vault path</div><div class="num" style="word-break:break-all">${esc(vaultPath||'…')}</div>
+    <div>Previous copies</div><div class="num">${g.length?g.map(x=>'.'+x.n+' '+fmtBytes(x.bytes)+' ('+esc(x.mtime)+')').join('<br>'):'none yet'}</div>
+    <div>Key derivation</div><div class="num">PBKDF2-SHA256 · ${stats?stats.iterations:'…'} iterations · AES-256-GCM</div>
+    <div>Backup folder</div><div class="num">${esc(st.backup_dir||'ask each time')}</div>
+    <div>Import folder</div><div class="num">${esc(st.import_dir||'ask each time')}</div>
+    <div>Version</div><div class="num">v${APP_VERSION} · ${APP_BUILD}</div>
+  </div>`;
+}
+async function refreshStoredNow(){
+  const r=await call('storage_info');
+  const el=document.getElementById('storedNow');
+  if(el) el.innerHTML=storedNowHTML(r.ok?r:null);
+}
+function viewData(){
+  const nsfwCount=db.prompts.filter(p=>p.nsfw).length;
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Prompt Vault · Data</div><h1>Data &amp; Security</h1>
+    <div class="sub">Everything lives in one encrypted vault file on disk. Export a backup to keep a second copy or move it to another machine.</div></div></div>
+  <div class="grid cols-2">
+    <div class="card">
+      <div class="cardhead"><h3>Backup &amp; restore</h3><span class="hint">your data, your file</span></div>
+      <div class="pad" style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn brass" onclick="exportBackup(true)">↓ Export encrypted backup</button>
+        <button class="btn" onclick="exportBackup(false)">↓ Export plain backup</button>
+        <button class="btn" onclick="importBackup()">↑ Import backup</button>
+      </div>
+      <div class="pad" style="padding-top:0">
+        <div class="sub" style="margin:0 0 6px">The encrypted backup is the same format as the vault itself — it carries its own salt, so it opens on any machine with just the passphrase, including the browser build.</div>
+        <div class="sub" style="margin:0"><b>The plain backup is readable by anyone who opens it.</b> Use it only for moving data somewhere you trust.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h3>Vault security</h3><span class="hint">${nsfwCount} marked protected</span></div>
+      <div class="pad">
+        <div class="sub" style="margin:0 0 10px">The whole vault is encrypted with your passphrase. It is never stored — losing it means losing the vault.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="lockNow()">Lock now</button>
+          <button class="btn ghost" onclick="openPinChangeModal()">Change passphrase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="cardhead"><h3>Display</h3><span class="hint">saved to settings, not the vault</span></div>
+    <div class="pad">${displaySettingsHTML()}</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="cardhead"><h3>File locations</h3><span class="hint">remembered between sessions</span></div>
+    <div class="pad">
+      <div class="sub" style="margin:0 0 10px">A default folder is used without asking. With none set, the folder you last used is offered instead.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="chooseDefaultDir('backup')">Set backup folder</button>
+        <button class="btn ghost" onclick="clearDefaultDir('backup')">Clear</button>
+        <button class="btn" onclick="chooseDefaultDir('import')">Set import folder</button>
+        <button class="btn ghost" onclick="clearDefaultDir('import')">Clear</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn" onclick="revealVault()">Open vault folder</button>
+        <button class="btn ghost" onclick="chooseVaultPath()">Change vault file…</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="pad">
+      <b style="font-size:13.5px">Stored now</b>
+      <div id="storedNow">${storedNowHTML(null)}</div>
+    </div>
+  </div>
+
+  <div class="grid cols-1" style="margin-top:16px">
+    <div class="card" style="border-color:var(--loss-soft)">
+      <div class="cardhead"><h3 style="color:var(--loss)">Danger zone</h3></div>
+      <div class="pad">
+        <div class="sub" style="margin:0 0 10px">Erases every prompt and category in this vault. The previous state stays in the rolling .1/.2/.3 copies beside the vault file.</div>
+        <button class="btn danger" onclick="resetAll()">Erase all data</button>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--faint);font-size:12px;margin-top:18px">Prompt Vault · app version <b style="color:var(--muted)">v${APP_VERSION}</b> · build ${APP_BUILD}<br>© 2026 Smaller Hammer · MIT Licence</p>`;
+}
+
+/* ============================ lightbox ============================ */
+function closeModal(){ $('#modalRoot').innerHTML=''; }
+/* The card thumbnail is cropped to a fixed aspect ratio; this shows the whole
+   stored image (uncropped, up to its saved resolution).
+   v6.0: the lightbox walks IMAGES, not cards. `items` is every imaged variant of
+   every card in the SAME category that is visible in that rollup (so an active
+   search/tag filter narrows it, matching what is on screen), in card order then
+   variant order. ‹ › / ← → step through that list, so a card's variants come
+   first and then the next card; Shift+← → jumps a whole card; 1–9, 0 pick a
+   variant of the current card. Variants with no image are shown in the strip as
+   "no image" tiles (so the count stays honest) and are never stepped onto. */
+let lbKeysBound=false;
+function lightboxItemsFor(catKey){
+  const items=[];
+  for(const x of visibleList()){
+    if((x.categoryId||'__uncat__')!==catKey) continue;
+    for(let j=0;j<vCount(x);j++) if(imageFor(vAt(x,j))) items.push([x.id,j]);
+  }
+  return items;
+}
+function openImageLightbox(id, vi){
+  const p=db.prompts.find(x=>x.id===id); if(!p) return;
+  if(vi==null) vi=shownIdx(p);
+  const items=lightboxItemsFor(p.categoryId||'__uncat__');
+  let idx=items.findIndex(t=>t[0]===id && t[1]===vi);
+  if(idx<0) idx=items.findIndex(t=>t[0]===id);
+  if(idx<0) return;
+  lightboxState={items, index:idx, cardChanged:false};
+  if(!lbKeysBound){ document.addEventListener('keydown', onLightboxKey); lbKeysBound=true; }
+  renderLightbox();
+}
+function lightboxCurrent(){
+  const t=lightboxState.items[lightboxState.index]; if(!t) return null;
+  const p=db && db.prompts.find(x=>x.id===t[0]); if(!p) return null;
+  return {p, vi:t[1], v:vAt(p,t[1])};
+}
+function lightboxCards(){ const seen=[]; for(const t of lightboxState.items) if(!seen.includes(t[0])) seen.push(t[0]); return seen; }
+function renderLightbox(){
+  const cur=lightboxCurrent();
+  const im=cur && imageFor(cur.v);
+  if(!cur || !im){ closeModal(); return; }
+  const {p, vi, v}=cur, id=p.id, n=vCount(p);
+  // keep the card behind the scrim on the variant being viewed (session only)
+  if(shownVar[id]!==vi){ shownVar[id]=vi; refreshCard(id); }
+  const cards=lightboxCards(), C=cards.length, ci=cards.indexOf(id);
+  const canStep=lightboxState.items.length>1;
+  const pos=(C>1?` · card ${ci+1} of ${C}`:'')+(n>1?` · variant ${vi+1} of ${n}`:'');
+  const vchip=n>1?`<span class="lbvchip">${esc(variantName(p,vi))}${vi===0?' · primary':''}</span>`:'';
+  const tagChips=(p.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+  const strip=n>1?`<div class="lbstrip" role="group" aria-label="Variants of this card">${Array.from({length:n},(_,j)=>{
+      const x=vAt(p,j), xi=imageFor(x), nm=esc(variantName(p,j));
+      return xi
+        ? `<button type="button" class="${j===vi?'on':''}" onclick="lightboxPick(${j})" title="Variant ${j+1}: ${nm}" aria-label="Variant ${j+1}, ${nm}"><img src="${xi.data}" alt=""><span>${j+1} · ${nm}</span></button>`
+        : `<button type="button" disabled title="Variant ${j+1} has no image" aria-label="Variant ${j+1}, ${nm}, no image"><div class="noimg">no image</div><span>${j+1} · ${nm}</span></button>`;
+    }).join('')}</div>`:'';
+  const hint=(canStep||n>1)?`<div class="lbkeys">← → every image${C>1?' · Shift + ← → jump card':''}${n>1?' · 1–9, 0 pick variant':''}</div>`:'';
+  const full=n>=MAX_VARIANTS;
+  $('#modalRoot').innerHTML=`
+  <div class="scrim imglightbox" onclick="if(event.target===this)closeModal()">
+    <div class="modal" id="lbModal" style="width:${lightboxWidthCSS(im.w, im.h)}">
+      <div class="mh"><h3 style="font-size:14px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Reference image<span id="lbPos" style="color:var(--ink)">${pos}</span>${vchip}<span id="lbRatio">${imageRatioTag(im)}</span></h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
+      <div style="position:relative">
+        ${canStep?`<button class="lightbox-nav left" onclick="lightboxStep(-1)" title="Previous image" aria-label="Previous image">‹</button>`:''}
+        <img src="${im.data}" onload="onLightboxImgLoad(this)" style="display:block;width:100%;max-height:${LB_IMG_VH}vh;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:var(--surface-2)">
+        ${canStep?`<button class="lightbox-nav right" onclick="lightboxStep(1)" title="Next image" aria-label="Next image">›</button>`:''}
+        ${lightboxState.cardChanged?`<div class="lbnext">Card ${ci+1} of ${C}</div>`:''}
+      </div>
+      ${strip}
+      ${(tagChips||hint)?`<div class="lbmeta"><div class="tagrow">${tagChips}</div>${hint}</div>`:''}
+      <div class="foot">
+        <button class="btn ghost" style="margin-right:auto" onclick="closeModal()">Close</button>
+        <button class="btn" onclick="copyPrompt('${id}',${vi})" title="Copy this variant's positive prompt to the clipboard">Copy prompt</button>
+        <button class="btn" onclick="openPromptModal('${id}',${vi},{duplicate:true})" ${full?`disabled title="A card holds up to ${MAX_VARIANTS} prompts"`:'title="Open the editor with a copy of this variant to tweak"'}>Duplicate as new variant</button>
+        <button class="btn brass" onclick="openPromptModal('${id}',${vi})">${n>1?`Edit variant ${vi+1}`:'Edit'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* Lightbox sizing (v5.5). It used to be a fixed 720px wide, which suited portrait
+   (height-bound at 70vh) but left landscape images width-bound and small. Now the
+   modal is sized from the image's own ratio so a landscape image grows until it
+   meets the same height limit portrait already hit, capped by the window width.
+   720px stays the floor, so portrait looks exactly as before. 44px = modal padding. */
+const LB_IMG_VH=72;
+function lightboxWidthCSS(w,h){
+  const ar=(w>0 && h>0) ? w/h : 0;
+  if(!ar) return 'min(720px,96vw)';
+  return `min(96vw, max(720px, calc(${ar.toFixed(4)} * ${LB_IMG_VH}vh + 44px)))`;
+}
+// Older images may lack stored w/h; fill the ratio and width from the decoded image.
+function onLightboxImgLoad(img){
+  const cur=lightboxCurrent(), im=cur && imageFor(cur.v);
+  if(!im || (im.w && im.h)) return;
+  const m=$('#lbModal'); if(m) m.style.width=lightboxWidthCSS(img.naturalWidth, img.naturalHeight);
+  const r=$('#lbRatio'); if(r) r.innerHTML=imageRatioTag({w:img.naturalWidth, h:img.naturalHeight});
+}
+function lightboxGo(index){
+  const L=lightboxState.items.length; if(!L) return;
+  const before=lightboxState.items[lightboxState.index];
+  lightboxState.index=((index%L)+L)%L;
+  const after=lightboxState.items[lightboxState.index];
+  lightboxState.cardChanged=!!(before && after && before[0]!==after[0]);
+  renderLightbox();
+}
+function lightboxStep(delta){ lightboxGo(lightboxState.index+delta); }
+// Shift+arrow: to the previous/next CARD, landing on the variant that card is showing
+function lightboxJumpCard(delta){
+  const cards=lightboxCards(); if(cards.length<2) return;
+  const cur=lightboxState.items[lightboxState.index];
+  const target=cards[(cards.indexOf(cur[0])+delta+cards.length)%cards.length];
+  const tp=db.prompts.find(x=>x.id===target), want=tp?shownIdx(tp):0;
+  let k=lightboxState.items.findIndex(t=>t[0]===target && t[1]===want);
+  if(k<0) k=lightboxState.items.findIndex(t=>t[0]===target);
+  lightboxGo(k);
+}
+function lightboxPick(j){
+  const cur=lightboxState.items[lightboxState.index]; if(!cur) return;
+  const k=lightboxState.items.findIndex(t=>t[0]===cur[0] && t[1]===j);
+  if(k>=0) lightboxGo(k);
+}
+// Only acts while the lightbox is open; the lightbox has no text fields to steal keys from.
+function onLightboxKey(e){
+  if(!document.querySelector('#modalRoot .imglightbox')) return;
+  if(e.ctrlKey || e.altKey || e.metaKey) return;
+  if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
+    const d=e.key==='ArrowLeft'?-1:1;
+    e.preventDefault();
+    if(e.shiftKey) lightboxJumpCard(d); else lightboxStep(d);
+  } else if(/^[0-9]$/.test(e.key)){
+    e.preventDefault();
+    lightboxPick(e.key==='0' ? 9 : (+e.key)-1);
+  } else if(e.key==='Escape'){
+    closeModal();
+  }
+}
+
+/* ============================ add/edit card modal ============================
+   v6.0: one card holds up to MAX_VARIANTS prompts. The editor shows a tab per
+   variant; everything in the grey panel belongs to the selected variant, and
+   category / tags / Protected below it are shared by the whole card.
+   modalState.vars holds a DRAFT of every variant. The DOM only ever shows one,
+   so captureModal() copies the visible fields back into its draft before
+   anything re-renders (tab switch, image pick, any variant action). Nothing
+   touches db until Save, and Save follows the honest-save contract. */
+function varDraft(v, keepId){
+  v=v||{};
+  return { id: keepId ? (v.id||null) : null, createdAt: keepId ? (v.createdAt||null) : null,
+    label:v.label||'', promptText:v.promptText||'', negativePrompt:v.negativePrompt||'', seed:v.seed||'',
+    width:v.width||'', height:v.height||'', comments:v.comments||'', image:imageFor(v) };
+}
+function draftName(d,j){ return (d.label||'').trim() || (j===0 ? 'Main' : 'Variant '+(j+1)); }
+function curDraft(){ return modalState.vars[modalState.idx]; }
+function captureModal(){
+  const d=curDraft(); if(!d) return;
+  const val=id=>{ const e=document.getElementById(id); return e ? e.value : null; };
+  if(document.getElementById('f_prompt')){
+    d.label=val('f_vlabel')||''; d.promptText=val('f_prompt'); d.negativePrompt=val('f_negprompt');
+    d.seed=val('f_seed'); d.width=val('f_width'); d.height=val('f_height'); d.comments=val('f_comments');
+  }
+  if(document.getElementById('f_category')){
+    modalState.shared.categoryId=val('f_category')||'';
+    modalState.shared.tags=val('f_tags')||'';
+    modalState.shared.nsfw=!!$('#f_nsfw').checked;
+  }
+}
+function renderImgPreview(){
+  const im=curDraft() && curDraft().image;
+  if(!im) return '<div class="sub" style="margin-top:6px">No image attached.</div>';
+  return `<img class="imgprev" src="${im.data}"><div style="margin-top:6px;display:flex;align-items:center;gap:10px"><button type="button" class="btn sm ghost" onclick="removeModalImage()">Remove image</button>${im.w&&im.h?`<span class="sub" style="margin:0">Image ratio ${imageRatioTag(im)}</span>`:''}</div>`;
+}
+function onModalImagePicked(input){
+  const f=input.files[0]; if(!f) return;
+  resizeImageFile(f, img=>{ captureModal(); curDraft().image=img; renderPromptModal(); });
+}
+function removeModalImage(){ captureModal(); curDraft().image=null; renderPromptModal(); }
+/* Protected is a display flag — the vault itself is encrypted. Card-level. */
+function onModalNsfwToggle(cb){ modalState.shared.nsfw=cb.checked; }
+function openPromptModal(id=null, startIdx=0, opts={}){
+  const p=id ? db.prompts.find(x=>x.id===id) : null;
+  if(id && !p) return;
+  const vars=p ? Array.from({length:vCount(p)}, (_,j)=>varDraft(vAt(p,j), j>0)) : [varDraft(null)];
+  let idx=Math.min(Math.max(0, startIdx|0), vars.length-1);
+  let msg='';
+  if(opts && opts.duplicate){
+    if(vars.length>=MAX_VARIANTS){ toast(`A card holds up to ${MAX_VARIANTS} prompts`); }
+    else {
+      const src=vars[idx];
+      vars.splice(idx+1, 0, Object.assign(varDraft(src,false), {label: src.label ? src.label+' copy' : ''}));
+      idx++; msg='Duplicated — change the prompt, attach the new image, then save.';
+    }
+  }
+  modalState={id, vars, idx, splits:[], msg,
+    shared:{categoryId: p ? (p.categoryId||'') : '', tags: p ? (p.tags||[]).join(', ') : '', nsfw: p ? !!p.nsfw : false}};
+  renderPromptModal();
+  setTimeout(()=>$('#f_prompt')&&$('#f_prompt').focus(),30);
+}
+function variantTabsHTML(){
+  const {vars, idx}=modalState, n=vars.length;
+  const tabs=vars.map((d,j)=>{
+    const thumb=d.image ? `<img src="${d.image.data}" alt="">` : `<div class="vt-empty"></div>`;
+    return `<button type="button" role="tab" class="vtab${j===idx?' on':''}" aria-selected="${j===idx}" onclick="switchVariant(${j})">${thumb}<div><small>${j===0?'★ 1 · primary':j+1}</small><span>${esc(draftName(d,j))}</span></div></button>`;
+  }).join('');
+  const full=n>=MAX_VARIANTS;
+  return `<div class="vtabsrow"><div class="vtabs" role="tablist" aria-label="Variants">${tabs}</div>
+    <button type="button" class="btn sm" onclick="variantAction('new')" ${full?'disabled':''} title="${full?`A card holds up to ${MAX_VARIANTS} prompts`:'Add a blank variant to this card'}">${full?`${MAX_VARIANTS} / ${MAX_VARIANTS}`:'+ New variant'}</button></div>`;
+}
+function renderPromptModal(){
+  const {id, vars, idx, shared, msg}=modalState;
+  const d=vars[idx], n=vars.length, full=n>=MAX_VARIANTS;
+  const prevScroll=(document.querySelector('#modalRoot .scrim')||{}).scrollTop||0;
+  const wr=aspectRatioLabel(parseInt(d.width,10),parseInt(d.height,10));
+  const act=(a,label,dis,extra='')=>`<button type="button" class="btn sm" onclick="variantAction('${a}')" ${dis?'disabled':''} ${extra}>${label}</button>`;
+  $('#modalRoot').innerHTML=`
+  <div class="scrim" onclick="if(event.target===this)closeModal()">
+    <div class="modal wide card">
+      <div class="mh"><h3>${id?(n>1?'Edit card':'Edit prompt'):'Add prompt'}</h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
+      <div class="sub" style="margin:0 0 4px">${n>1?`${n} variants in this card · up to ${MAX_VARIANTS}. The primary shows first on the card.`:`Add variants to keep related prompts on one card · up to ${MAX_VARIANTS}.`}</div>
+      ${variantTabsHTML()}
+      <div class="vpanel">
+        <div class="vactions">
+          <span class="rowlabel">Variant ${idx+1} of ${n}${idx===0?' · primary':''}</span>
+          ${act('dup','Duplicate',full,`title="${full?`A card holds up to ${MAX_VARIANTS} prompts`:'Copy this variant into a new one next to it'}"`)}
+          ${act('primary','Make primary',idx===0)}
+          ${act('left','◀',idx===0,'aria-label="Move variant left" title="Move left"')}
+          ${act('right','▶',idx===n-1,'aria-label="Move variant right" title="Move right"')}
+          ${act('split','Split to own card',n<=1,'title="Take this variant out into a card of its own (same category and tags) when you save"')}
+          ${act('delete','Delete variant',n<=1,'style="color:var(--loss);border-color:var(--loss-soft)"')}
+        </div>
+        ${msg?`<div class="vmsg">${esc(msg)}</div>`:''}
+        <label class="fld" for="f_vlabel">Variant name (optional)</label>
+        <input id="f_vlabel" placeholder="e.g. Night, Low angle, Teal" value="${esc(d.label)}">
+        <div class="fldrow"><label class="fld" for="f_prompt">Positive prompt</label><button type="button" class="btn sm" onclick="copyModalPrompt()" title="Copy the positive prompt as currently typed">Copy</button></div>
+        <textarea id="f_prompt" rows="10" placeholder="e.g. A weathered lighthouse at dusk, cinematic lighting...">${esc(d.promptText)}</textarea>
+        <label class="fld" for="f_negprompt">Negative prompt (optional)</label>
+        <textarea id="f_negprompt" rows="2" placeholder="e.g. blurry, low quality, extra limbs...">${esc(d.negativePrompt)}</textarea>
+        <label class="fld" for="f_img">Reference image (optional)</label>
+        <input id="f_img" type="file" accept="image/*" onchange="onModalImagePicked(this)">
+        <div id="imgPreviewWrap">${renderImgPreview()}</div>
+        <label class="fld" for="f_seed">Seed (optional)</label>
+        <input id="f_seed" placeholder="e.g. 1847293650" inputmode="numeric" value="${esc(d.seed)}">
+        <label class="fld" for="f_width">Width &amp; height (optional)</label>
+        <div style="display:flex;gap:8px">
+          <input id="f_width" type="number" min="1" step="1" placeholder="Width, e.g. 1024" oninput="updateWHRatio()" value="${esc(d.width)}">
+          <input id="f_height" type="number" min="1" step="1" placeholder="Height, e.g. 1536" oninput="updateWHRatio()" value="${esc(d.height)}">
+        </div>
+        <div id="wh_ratio" class="sub" style="margin-top:6px">${wr?'Ratio: '+wr:''}</div>
+        <label class="fld" for="f_comments">Notes${n>1?' for this variant':' / comments'}</label>
+        <textarea id="f_comments" rows="3" placeholder="Any notes about this prompt...">${esc(d.comments)}</textarea>
+      </div>
+      <div class="rowlabel" style="margin-top:18px">${n>1?`Shared by all ${n} variants`:'Card'}</div>
+      <label class="fld" for="f_category">Category (optional)</label>
+      <select id="f_category">
+        <option value="">— Uncategorized —</option>
+        ${db.libCategories.map(c=>`<option value="${esc(c.id)}" ${shared.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+      </select>
+      <label class="fld" for="f_tags">Tags (comma separated)</label>
+      <input id="f_tags" placeholder="e.g. landscape, cinematic" list="tagsuggest" value="${esc(shared.tags)}">
+      <datalist id="tagsuggest">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+      <div class="checkline"><input id="f_nsfw" type="checkbox" ${shared.nsfw?'checked':''} onchange="onModalNsfwToggle(this)"><label for="f_nsfw" style="margin:0;font-size:13px;color:var(--ink)">Mark as Protected</label></div>
+      <div class="foot">
+        ${id?`<button class="btn danger" style="margin-right:auto" onclick="deletePromptConfirm('${id}')">${vCount(db.prompts.find(x=>x.id===id))>1?'Delete card':'Delete'}</button>`:''}
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" onclick="savePromptModal()">${id?'Save changes':'Add prompt'}</button>
+      </div>
+    </div>
+  </div>`;
+  const sc=document.querySelector('#modalRoot .scrim'); if(sc) sc.scrollTop=prevScroll;
+  const tab=document.querySelector('#modalRoot .vtab.on'); if(tab && tab.scrollIntoView) tab.scrollIntoView({block:'nearest', inline:'nearest'});
+}
+function switchVariant(j){
+  captureModal();
+  if(j<0 || j>=modalState.vars.length) return;
+  modalState.idx=j; modalState.msg='';
+  renderPromptModal();
+}
+function variantAction(a){
+  captureModal();
+  const s=modalState, n=s.vars.length, i=s.idx, d=s.vars[i], name=draftName(d,i);
+  const move=(from,to)=>{ const [m]=s.vars.splice(from,1); s.vars.splice(to,0,m); s.idx=to; };
+  let msg='';
+  if(a==='new'){
+    if(n>=MAX_VARIANTS) return toast(`A card holds up to ${MAX_VARIANTS} prompts`);
+    s.vars.push(Object.assign(varDraft(null), {width:d.width, height:d.height}));
+    s.idx=n; msg='New blank variant — the size was carried over from the one you were on.';
+  } else if(a==='dup'){
+    if(n>=MAX_VARIANTS) return toast(`A card holds up to ${MAX_VARIANTS} prompts`);
+    s.vars.splice(i+1, 0, Object.assign(varDraft(d,false), {label: d.label ? d.label+' copy' : ''}));
+    s.idx=i+1; msg='Duplicated — change the prompt, attach the new image, then save.';
+  } else if(a==='primary'){
+    if(i===0) return; move(i,0); msg=`“${name}” is now the primary — it shows first on the card.`;
+  } else if(a==='left'){ if(i===0) return; move(i,i-1); }
+  else if(a==='right'){ if(i>=n-1) return; move(i,i+1); }
+  else if(a==='split'){
+    if(n<=1) return;
+    if(!(d.promptText||'').trim()) return toast('Give this variant a prompt before splitting it out');
+    s.splits.push(s.vars.splice(i,1)[0]); s.idx=Math.max(0,i-1);
+    msg=`“${name}” will become its own card (same category and tags) when you save.`;
+  } else if(a==='delete'){
+    if(n<=1) return;
+    s.vars.splice(i,1); s.idx=Math.max(0,i-1);
+    msg=`“${name}” removed. Nothing is written until you save.`;
+  } else return;
+  s.msg=msg;
+  renderPromptModal();
+}
+function cleanDraft(d){
+  return { label:(d.label||'').trim(), promptText:(d.promptText||'').trim(), negativePrompt:(d.negativePrompt||'').trim(),
+    seed:(d.seed||'').trim(), width:parseInt(d.width,10)||null, height:parseInt(d.height,10)||null,
+    comments:(d.comments||'').trim(), image:d.image||null };
+}
+async function savePromptModal(){
+  captureModal();
+  const s=modalState;
+  for(let j=0;j<s.vars.length;j++){
+    if(!(s.vars[j].promptText||'').trim()){
+      if(s.idx!==j){ s.idx=j; s.msg=''; renderPromptModal(); }
+      return toast(s.vars.length>1 ? `Enter a prompt for variant ${j+1}` : 'Enter a prompt');
+    }
+  }
+  const now=new Date().toISOString();
+  const tags=String(s.shared.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+  const categoryId=s.shared.categoryId||null, nsfw=!!s.shared.nsfw;
+  const isEdit=!!s.id;
+  /* The primary keeps the pre-v6 field names on the card itself, so a vault
+     with no variants is byte-for-byte the v5 shape and the browser build still
+     reads the primary. Alternates go in `variants`, which is omitted when empty. */
+  const [prim, ...rest]=s.vars.map(cleanDraft);
+  const variants=rest.map((v,k)=>{ const src=s.vars[k+1];
+    const o=Object.assign({id: src.id || 'v'+uid().slice(1), createdAt: src.createdAt || now}, v);
+    if(!o.label) delete o.label; return o; });
+  let p=s.id ? db.prompts.find(x=>x.id===s.id) : null;
+  const fields=Object.assign({}, prim, {tags, nsfw, categoryId});
+  if(p){ Object.assign(p, fields); p.updatedAt=now; }
+  else { p=Object.assign({id:uid(), createdAt:now, updatedAt:now}, fields); db.prompts.push(p); }
+  if(!p.label) delete p.label;
+  if(variants.length) p.variants=variants; else delete p.variants;
+  const splitCards=s.splits.map(x=>{ const c=Object.assign({id:uid(), createdAt:now, updatedAt:now}, cleanDraft(x), {tags:tags.slice(), nsfw, categoryId});
+    if(!c.label) delete c.label; return c; });
+  for(const c of splitCards) db.prompts.push(c);
+  shownVar[p.id]=Math.min(s.idx, vCount(p)-1);
+  const ok=await saveDB();
+  closeModal(); render();
+  if(ok){
+    if(splitCards.length) toast(`Saved — ${splitCards.length} variant${splitCards.length===1?'':'s'} moved to ${splitCards.length===1?'its own card':'their own cards'}`);
+    else toast(isEdit?'Prompt updated':'Prompt added');
+  }
+}
+async function deletePromptConfirm(id){
+  const p=db.prompts.find(x=>x.id===id); if(!p) return;
+  const n=vCount(p);
+  if(!confirm(n>1 ? `Delete this card and all ${n} of its variants? This cannot be undone.` : 'Delete this prompt? This cannot be undone.')) return;
+  db.prompts=db.prompts.filter(x=>x.id!==id);
+  delete shownVar[id];
+  const ok=await saveDB(); closeModal(); render();
+  if(ok) toast(n>1?'Card deleted':'Prompt deleted');
+}
+// Copies what is in the box now, including unsaved edits — that is what you see.
+function copyModalPrompt(){
+  const el=$('#f_prompt'); if(!el) return;
+  copyText(el.value, 'Prompt copied');
+}
+function copyText(text, okMsg){
+  return navigator.clipboard.writeText(text||'').then(()=>{ if(okMsg) toast(okMsg); return true; })
+    .catch(()=>{ toast('Copy failed — clipboard blocked'); return false; });
+}
+// Copies the positive prompt of variant `vi` (default: the one the card is showing).
+function copyPrompt(id, vi){
+  const p=db.prompts.find(x=>x.id===id); if(!p) return;
+  const v=vAt(p, vi==null ? shownIdx(p) : vi);
+  return copyText(v.promptText||'', 'Prompt copied');
+}
+
+/* ============================ PIN gate ============================
+   The PIN is the vault key: nothing is readable until it is entered, and the
+   app opens into this gate rather than into the Library. */
+function gateHTML(mode, msg){
+  const first = mode==='create';
+  return `<div class="gatewrap"><div class="gate">
+    <div class="gatebrand">${SEAL_SVG}<div><b>Prompt Vault</b><small>A Smaller Hammer App</small></div></div>
+    <h2>${first?'Create your vault':'Unlock'}</h2>
+    <p class="gatehint">${first
+      ? 'Choose a passphrase. It encrypts the whole vault file and is never stored anywhere — if you lose it, the vault cannot be recovered by anyone.'
+      : 'Enter the passphrase for this vault.'}</p>
+    <input id="gatePin" type="password" placeholder="Passphrase" autofocus
+           onkeydown="if(event.key==='Enter')submitGate('${mode}')">
+    ${first?`<input id="gatePin2" type="password" placeholder="Repeat passphrase"
+           onkeydown="if(event.key==='Enter')submitGate('${mode}')">`:''}
+    <div id="gateMsg" class="gatemsg">${msg?esc(msg):''}</div>
+    <button class="btn brass" onclick="submitGate('${mode}')">${first?'Create vault':'Unlock'}</button>
+    <div class="gatepath" id="gatePath"></div>
+  </div></div>`;
+}
+function gateMsg(t){ const e=$('#gateMsg'); if(e) e.textContent=t; }
+async function submitGate(mode){
+  const pin=$('#gatePin').value;
+  if(pin.length<4) return gateMsg('At least 4 characters.');
+  if(mode==='create'){
+    if(pin!==$('#gatePin2').value) return gateMsg('The two entries do not match.');
+    const r=await call('create_vault', pin);
+    if(!r.ok) return gateMsg(r.error||'Could not create the vault.');
+    db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library'; render(); return;
+  }
+  gateMsg('Deriving key…');
+  const r=await call('unlock', pin);
+  if(!r.ok) return gateMsg(r.error||'Could not unlock.');
+  db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library'; render();
+  if(r.upgraded) toast(`Vault re-encrypted — key derivation raised to ${r.upgraded.to.toLocaleString()} iterations`);
+}
+function openPinChangeModal(){
+  /* v5.5.1: this and the import PIN dialog used wrapper/head/foot class names
+     that had no CSS behind them — so they rendered in page flow at the bottom of the Data
+     screen instead of as an overlay. They now use the same .scrim/.modal/.mh/.foot
+     as every other dialog. */
+  $('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:min(420px,96vw)">
+      <div class="mh"><h3>Change passphrase</h3><button class="iconbtn" onclick="closeModal()">✕</button></div>
+      <div class="sub" style="margin:0 0 4px">The vault is re-encrypted immediately under the new passphrase. Existing backup files keep their old one.</div>
+      <label class="fld" for="pc1">New passphrase</label><input id="pc1" type="password">
+      <label class="fld" for="pc2">Repeat</label><input id="pc2" type="password" onkeydown="if(event.key==='Enter')confirmPinChange()">
+      <div id="pcMsg" class="gatemsg" style="margin-top:8px"></div>
+      <div class="foot" style="margin-top:8px"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" onclick="confirmPinChange()">Change</button></div>
+    </div></div>`;
+  const f=$('#pc1'); if(f) f.focus();
+}
+async function confirmPinChange(){
+  const a=$('#pc1').value, b=$('#pc2').value;
+  if(a.length<4){ $('#pcMsg').textContent='At least 4 characters.'; return; }
+  if(a!==b){ $('#pcMsg').textContent='The two entries do not match.'; return; }
+  const r=await call('change_pin', a, JSON.stringify(db));
+  if(!r.ok){ $('#pcMsg').textContent=r.error||'Failed.'; return; }
+  closeModal(); toast('Passphrase changed');
+}
+
+
+/* ============================ data io ============================ */
+async function exportBackup(encrypted){
+  const r=await call('export_backup', !!encrypted, JSON.stringify(db));
+  if(r.cancelled) return;
+  if(!r.ok){ setStorageAlert('Export failed — '+(r.error||'unknown error')); return; }
+  toast('Backup written to '+r.path);
+}
+async function importBackup(){
+  const pick=await call('pick_import');
+  if(pick.cancelled) return;
+  if(!pick.ok){ setStorageAlert('Import failed — '+(pick.error||'unknown error')); return; }
+  if(!confirm('Import replaces the whole library in this vault. Continue?')) return;
+  importState={path:pick.path, filePin:null, legacyPin:null};
+  runImport();
+}
+/* Import may need up to two different PINs — one for the backup file, one for
+   protected prompts encrypted individually inside a browser-build backup.
+   Python says which is missing; this just asks for whichever it names. */
+let importState=null;
+async function runImport(){
+  const st=importState; if(!st) return;
+  const r=await call('import_backup', st.path, st.filePin, st.legacyPin);
+  if(r.ok){
+    importState=null; closeModal();
+    db=r.db; expandedCats=r.expanded||{}; setStorageAlert(null); render();
+    const c=r.counts||{};
+    toast(r.migrated
+      ? `Imported from the browser build — ${c.prompts} prompts, ${c.images} images`
+      : `Backup imported — ${c.cards && c.prompts>c.cards ? `${c.cards} cards, ${c.prompts} prompts` : `${c.prompts} prompts`}`);
+    return;
+  }
+  if(r.need==='filePin')   return openImportPinModal('file', r.error);
+  if(r.need==='legacyPin') return openImportPinModal('legacy', r.error, r.info);
+  closeModal();
+  setStorageAlert('Import failed — '+(r.error||'unknown error'));
+}
+function openImportPinModal(which, err, info){
+  const legacy = which==='legacy';
+  const detail = legacy && info
+    ? `This backup came from the browser build. ${info.encryptedPrompts} protected prompt${info.encryptedPrompts===1?'':'s'}`
+      + (info.encryptedImages?` and ${info.encryptedImages} protected image${info.encryptedImages===1?'':'s'}`:'')
+      + ' still need the PIN they were created with — it may differ from this vault\'s passphrase.'
+    : 'This backup file is encrypted. Enter the passphrase it was exported with.';
+  $('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)cancelImport()">
+    <div class="modal" style="width:min(440px,96vw)">
+      <div class="mh"><h3>${legacy?'Protected content':'Encrypted backup'}</h3><button class="iconbtn" onclick="cancelImport()">✕</button></div>
+      <div class="sub" style="margin:0 0 12px">${detail}</div>
+      <input id="impPin" type="password" placeholder="${legacy?'Original PIN':'Backup passphrase'}" autofocus
+             onkeydown="if(event.key==='Enter')submitImportPin('${which}')">
+      <div id="impMsg" class="gatemsg" style="margin-top:8px">${err?esc(err):''}</div>
+      <div class="foot" style="margin-top:8px">
+        <button class="btn ghost" onclick="cancelImport()">Cancel</button>
+        <button class="btn brass" onclick="submitImportPin('${which}')">Continue</button>
+      </div>
+    </div></div>`;
+  const f=$('#impPin'); if(f) f.focus();
+}
+function cancelImport(){ importState=null; closeModal(); }
+async function submitImportPin(which){
+  const v=$('#impPin').value;
+  if(!v) return;
+  if(which==='legacy') importState.legacyPin=v; else importState.filePin=v;
+  $('#impMsg').textContent='Decrypting…';
+  await runImport();
+}
+async function resetAll(){
+  if(!confirm('Erase all prompts and categories in this vault? This cannot be undone.')) return;
+  if(!confirm('Really erase everything? The previous state remains in the rolling .1/.2/.3 files beside the vault.')) return;
+  db={version:1, dataVersion:1, prompts:[], libCategories:[]};
+  expandedCats={}; saveExpanded();
+  const ok=await saveDB();
+  render();
+  if(ok) toast('All data erased');
+}
+async function chooseDefaultDir(kind){
+  const r=await call('choose_default_dir', kind);
+  if(r.ok){ toast('Default set'); refreshStoredNow(); }
+}
+async function clearDefaultDir(kind){ await call('clear_default_dir', kind); refreshStoredNow(); }
+async function chooseVaultPath(){
+  const r=await call('choose_vault_path');
+  if(r.ok) alert('Vault path set to:\n'+r.path+'\n\nRestart Prompt Vault for this to take effect. The current vault file is not moved — copy it there yourself if that is what you intended.');
+}
+async function revealVault(){ await call('reveal_vault'); }
+
+/* ============================ right-click menu ============================
+   Not by design: pywebview ties WebView2's built-in context menu to debug mode
+   (AreDefaultContextMenusEnabled = debug), so a normal launch has no menu at
+   all. Turning debug on would bring it back along with "Inspect" and DevTools,
+   so the app draws its own — Cut / Copy / Paste / Select all for text fields,
+   Copy for selected page text. Keyboard shortcuts were never affected.
+   Paste reads the clipboard through Python (Api.clipboard_text) because the
+   browser clipboard-read API asks for permission inside WebView2. */
+let ctxTarget=null, ctxSel=null;
+const CTX_TEXT_TYPES=['text','search','number','password','email','url','tel',''];
+function ctxEditable(el){
+  if(!el) return null;
+  if(el.tagName==='TEXTAREA') return el;
+  if(el.tagName==='INPUT' && CTX_TEXT_TYPES.includes((el.getAttribute('type')||'').toLowerCase())) return el;
+  return null;
+}
+function fieldSel(el){
+  try{ return {s:el.selectionStart, e:el.selectionEnd}; }catch(_){ return {s:null, e:null}; }   // type=number has no selection API
+}
+function closeCtxMenu(){ const r=$('#ctxRoot'); if(r) r.innerHTML=''; ctxTarget=null; ctxSel=null; }
+function openCtxMenu(ev){
+  const el=ctxEditable(ev.target);
+  const pageText=String(window.getSelection ? window.getSelection() : '');
+  ev.preventDefault();
+  if(!el && !pageText){ closeCtxMenu(); return; }
+  ctxTarget=el;
+  let hasSel=!!pageText, isPw=false, ro=false;
+  if(el){
+    ctxSel=fieldSel(el);
+    isPw=(el.getAttribute('type')||'').toLowerCase()==='password';
+    ro=el.readOnly || el.disabled;
+    hasSel = ctxSel.s!=null ? ctxSel.e>ctxSel.s : false;
+  } else ctxSel={page:pageText};
+  const item=(act,label,key,enabled)=>`<button type="button" ${enabled?'':'disabled'} onclick="ctxDo('${act}')"><span>${label}</span><kbd>${key}</kbd></button>`;
+  const html = el
+    ? item('cut','Cut','Ctrl+X',hasSel && !isPw && !ro)
+      + item('copy','Copy','Ctrl+C',hasSel && !isPw)
+      + item('paste','Paste','Ctrl+V',!ro)
+      + '<hr>' + item('selectall','Select all','Ctrl+A',!!el.value)
+    : item('copy','Copy','Ctrl+C',true);
+  const root=$('#ctxRoot');
+  // mousedown is cancelled so clicking an item keeps the field's focus and selection
+  root.innerHTML=`<div class="ctxmenu" id="ctxMenu" onmousedown="event.preventDefault()">${html}</div>`;
+  const m=$('#ctxMenu');
+  const W=window.innerWidth, H=window.innerHeight, mw=m.offsetWidth||170, mh=m.offsetHeight||150;
+  m.style.left=Math.max(4, Math.min(ev.clientX, W-mw-4))+'px';
+  m.style.top =Math.max(4, Math.min(ev.clientY, H-mh-4))+'px';
+}
+function insertIntoField(el, text){
+  el.focus();
+  // execCommand keeps the field's own undo history; setRangeText is the fallback
+  let done=false;
+  try{ done=document.execCommand && document.execCommand('insertText', false, text); }catch(_){ done=false; }
+  if(done) return;
+  const {s,e}=fieldSel(el);
+  if(s==null){ el.value=text; }
+  else { el.setRangeText(text, s, e, 'end'); }
+  el.dispatchEvent(new Event('input', {bubbles:true}));
+}
+async function readClipboard(){
+  const r=await call('clipboard_text');
+  if(r.ok) return r.text||'';
+  try{ return await navigator.clipboard.readText(); }catch(_){ return null; }
+}
+async function ctxDo(act){
+  const el=ctxTarget, sel=ctxSel;
+  closeCtxMenu();
+  if(!el){ if(act==='copy' && sel && sel.page) copyText(sel.page); return; }
+  el.focus();
+  if(sel && sel.s!=null){ try{ el.setSelectionRange(sel.s, sel.e); }catch(_){} }
+  const chosen = sel && sel.s!=null ? el.value.slice(sel.s, sel.e) : '';
+  if(act==='copy'){ if(chosen) copyText(chosen); }
+  else if(act==='cut'){ if(chosen && await copyText(chosen)) insertIntoField(el, ''); }
+  else if(act==='paste'){
+    const t=await readClipboard();
+    if(t==null) return toast('Paste failed — use Ctrl+V');
+    if(sel && sel.s!=null){ try{ el.setSelectionRange(sel.s, sel.e); }catch(_){} }
+    insertIntoField(el, t);
+  }
+  else if(act==='selectall'){ el.select(); }
+}
+document.addEventListener('contextmenu', openCtxMenu);
+document.addEventListener('mousedown', e=>{ if(!e.target.closest || !e.target.closest('#ctxMenu')) closeCtxMenu(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeCtxMenu(); });
+window.addEventListener('blur', closeCtxMenu);
+window.addEventListener('resize', closeCtxMenu);
+document.addEventListener('scroll', closeCtxMenu, true);
+
+/* ============================ boot ============================ */
+async function boot(){
+  await apiReady();
+  const st=await call('status');
+  if(!st.ok){ document.getElementById('main').innerHTML='<p class="hint" style="padding:30px">'+esc(st.error||'No desktop bridge.')+'</p>'; return; }
+  APP_VERSION=st.appVersion; APP_BUILD=st.appBuild; vaultPath=st.vaultPath; vaultExists=st.exists;
+  if(st.ui && typeof st.ui==='object') uiPrefs=Object.assign(uiPrefs, st.ui);
+  applyCardWidth();
+  if(st.lock && !st.lock.stale){
+    if(!confirm('This vault appears to be open already:\n\n  '+st.lock.host+' (pid '+st.lock.pid+') since '+st.lock.since+
+                '\n\nTwo copies writing to one vault will lose work. Open anyway?')) { window.close(); return; }
+  }
+  render();
+  const gp=document.getElementById('gatePath');
+  if(gp) gp.textContent=vaultPath;
+}
+boot();
+</script>
+</body>
+</html>

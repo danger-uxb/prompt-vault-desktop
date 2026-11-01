@@ -1,0 +1,4 @@
+# Prompt Vault Desktop
+pywebview>=5.0        # the app window (uses Microsoft Edge WebView2 on Windows)
+cryptography>=42.0    # PBKDF2-SHA256 + AES-256-GCM vault encryption
+pyinstaller>=6.0      # only needed to build PromptVault.exe (build_exe.bat)
