@@ -101,7 +101,7 @@ h1{margin:0;font-size:22px;font-weight:680;letter-spacing:-.02em}
 /* ---- inputs ---- */
 label.fld{display:block;font-size:12px;color:var(--muted);font-weight:550;margin:12px 0 5px}
 input,select,textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--sans);background:#fff;color:var(--ink)}
-.cardcat{width:auto;max-width:110px;padding:5px 6px;font-size:11.5px;border-radius:6px;color:var(--muted)}
+.cardcat{width:auto;max-width:110px;min-width:0;flex:0 1 auto;padding:5px 6px;font-size:11.5px;border-radius:6px;color:var(--muted)}
 textarea{resize:vertical}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);border-color:var(--brass)}
 .checkline{display:flex;align-items:center;gap:8px;margin:14px 0 6px}
@@ -134,7 +134,12 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
 .pcard .pseed{font-size:11px;color:var(--faint)}
 .pcard .pseed code{font-family:var(--mono);color:var(--muted)}
 .pcard .tagrow{display:flex;flex-wrap:wrap;gap:5px}
-.pcard .foot{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;border-top:1px solid var(--line-2)}
+/* v6.3: the left group (Copy + category) may shrink, so the category select gives
+   up width before the delete button is pushed past the card's edge */
+.pcard .foot{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:10px 13px;border-top:1px solid var(--line-2)}
+.pcard .foot .fl{display:flex;gap:6px;align-items:center;min-width:0;flex:1 1 auto}
+.pcard .foot .fr{display:flex;gap:6px;align-items:center;flex:none}
+.pcard .foot .btn{flex:none}
 .empty{text-align:center;padding:46px 20px;color:var(--muted)}
 .rowlabel{font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.07em}
 .catmgmt{margin-top:6px}
@@ -170,6 +175,18 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
   padding:10px 18px;font-size:13px;font-weight:600;line-height:1.4;text-align:center;
   box-shadow:0 2px 12px rgba(22,32,43,.3)}
 .savealert[hidden]{display:none}
+/* Busy indicator (v6.3): shown the moment a vault write or other slow job starts,
+   until it finishes. The layer is transparent but takes the pointer (progress
+   cursor), so a second click cannot start the same job again; keys are held back
+   by a keydown guard. Sits under the save banner, above dialogs. */
+.busy{position:fixed;inset:0;z-index:110;cursor:progress;background:transparent}
+.busy[hidden]{display:none}
+.busy.tail{pointer-events:none;cursor:auto}   /* job done, pill fading out: clicks pass through */
+.busypill{position:fixed;left:50%;top:16px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;
+  background:var(--ink);color:#fff;padding:9px 16px 9px 12px;border-radius:999px;font-size:13px;font-weight:600;
+  box-shadow:0 8px 26px rgba(16,22,30,.32);white-space:nowrap}
+.spin{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,255,255,.22);border-top-color:var(--brass-hi);animation:spin .75s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 /* ---- PIN gate (desktop build) ---- */
 #gateRoot[hidden]{display:none}
 .gatewrap{position:fixed;inset:0;background:var(--ink);display:grid;place-items:center;padding:24px;overflow:auto}
@@ -189,10 +206,35 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
 .scrim{position:fixed;inset:0;background:rgba(16,22,30,.45);display:grid;place-items:center;z-index:50;padding:20px;overflow-y:auto}
 .modal{background:var(--surface);border-radius:var(--r-lg);width:min(480px,96vw);box-shadow:0 20px 60px rgba(16,22,30,.3);padding:20px 22px;margin:auto}
 .modal.wide{width:min(600px,96vw)}
-.modal.card{width:min(820px,96vw)}   /* v6.0 card editor: room for ~6 variant tabs and one row of actions */
+.modal.card{width:min(1120px,96vw)}  /* v6.8 card editor: image column beside the prompt; ~8 tabs fit */
+/* v6.8: the editor is a column that fits the window - header and tabs on top, the
+   footer always visible, and only the body between them scrolls */
+.modal.card{max-height:calc(100vh - 40px);display:flex;flex-direction:column;padding-bottom:0}
+.modal.card .edhead{flex:none}
+.modal.card .edbody{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -22px;padding:0 22px 2px}
+.modal.card .foot{flex:none;margin:12px -22px 0;padding:12px 22px 16px;border-top:1px solid var(--line-2)}
+.vcount{margin:0 2px 10px auto;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.edgrid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;margin-top:10px}
+.edcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.edgrid label.fld,.edshared label.fld,.edgrid .fldrow label.fld{margin:0 0 4px}
+.edgrid .fldrow{margin-bottom:4px;align-items:flex-end}
+.edimg .imgprev{width:100%;height:auto;max-height:300px;object-fit:contain;margin:0;background:var(--surface)}
+.imgempty{border:1px dashed var(--line);border-radius:8px;min-height:120px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;color:var(--muted);font-size:12.5px;background:var(--surface)}
+.edimgbar{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.edimgbar .sub{margin:0 0 0 auto}
+.whrow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;color:var(--muted)}
+textarea.grow{resize:none;overflow-y:hidden}
+#f_prompt.grow{min-height:220px}
+#f_negprompt.grow{min-height:58px}
+#f_comments.grow{min-height:76px}
+.edshared{display:grid;grid-template-columns:240px minmax(0,1fr) auto;gap:10px;align-items:end;margin-top:14px}
+.edshared .checkline{margin:0 0 8px;white-space:nowrap}
+@media (max-width:900px){.edgrid,.edshared{grid-template-columns:1fr}}
 .modal .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .modal .mh h3{margin:0;font-size:16px}
 .modal .foot{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.scrim.imgviewer{z-index:55}   /* v6.6: above the editor's scrim (50), below the toast (60) */
+.imgviewer .vclose{position:absolute;top:10px;right:10px;z-index:1}
 .imgprev{max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--line);margin-top:8px;display:block}
 .lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(22,32,43,.55);color:#fff;border:0;width:38px;height:38px;border-radius:50%;font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .lightbox-nav:hover{background:rgba(22,32,43,.8)}
@@ -226,11 +268,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
 .ctxmenu hr{border:0;border-top:1px solid var(--line-2);margin:4px 2px}
 
 /* ---- variants (v6.0) ----
-   A card can hold up to MAX_VARIANTS prompts. Option A from the 2026-11-02 review:
-   a stacked edge behind the card (box-shadow only, so it takes no layout space and
-   the 1:1 Display preview stays exact), a corner count, dots on the image, and
-   arrows that appear on hover. */
-.pcard.multi{box-shadow:0 1px 2px rgba(22,32,43,.06),5px 5px 0 -1px var(--surface),5px 5px 0 0 var(--line),10px 10px 0 -2px var(--surface),10px 10px 0 -1px var(--line)}
+   A card can hold up to MAX_VARIANTS prompts, shown by a corner count, dots on
+   the image, and arrows that appear on hover. (v6.3: the stacked edge drawn behind
+   multi-prompt cards was removed as visually distracting; .multi stays as a hook.) */
 .pcard .tw{position:relative;overflow:hidden}
 .vbadge{position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:5px;background:rgba(22,32,43,.74);color:#fff;font-size:11.5px;font-weight:650;padding:3px 8px 3px 7px;border-radius:999px;font-variant-numeric:tabular-nums;pointer-events:none}
 .vnav{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:0;background:rgba(22,32,43,.6);color:#fff;font-size:19px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .12s}
@@ -264,7 +304,103 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
 .mergerow img,.mergerow .mf-empty{width:44px;height:33px;object-fit:cover;border-radius:4px;display:block;flex:none;border:1px solid var(--line)}
 .mergerow .mf-empty{background:var(--surface-2);border-style:dashed}
 .mergerow b{font-size:12px;color:var(--muted);font-weight:650;white-space:nowrap;min-width:70px}
+.impmode{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-top:8px;cursor:pointer}
+.impmode.on{border-color:var(--brass);background:var(--brass-soft)}
+.impmode input{width:auto;margin-top:3px;accent-color:var(--brass)}
+.mr-pair{display:flex;align-items:center;gap:4px;flex:none;color:var(--faint);font-size:12px}
+.impmode b{display:block;font-size:13.5px}
+.impmode small{display:block;color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:2px}
+.mstats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mstat{border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;background:var(--surface-2)}
+.mstat b{display:block;font-size:20px;font-weight:650}
+.mstat span{font-size:12px;color:var(--muted)}
+.mstat.chg b{color:var(--warn)} .mstat.ovl b{color:var(--brass)} .mstat.new b{color:var(--gain)}
+.msec{margin-top:16px;border-top:1px solid var(--line-2);padding-top:12px}
+.msec-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.mrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line-2)}
+.mrow:first-of-type{border-top:0}
+.mrow img,.mrow .mf-empty{width:52px;height:39px;object-fit:cover;border-radius:5px;border:1px solid var(--line);display:block;flex:none}
+.mrow .mf-empty{background:var(--surface-2);border-style:dashed}
+.mr-txt{min-width:0;flex:1}
+.mr-snip{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-sub{font-size:12px;color:var(--muted)}
+.seg{display:flex;flex:none;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 10px;font-size:12.5px;cursor:pointer;color:var(--ink);font-family:var(--sans)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--brass);color:#fff}
 .mergenote{font-size:12.5px;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:6px 10px;margin-top:10px}
+/* v6.7 alternate vaults: gate picker, new-vault form, switch dialog, Vaults card */
+.gate label.gl{display:block;font-size:12px;color:var(--muted);font-weight:550;margin:0 0 5px}
+.gate select.gatesel{width:100%;margin-bottom:12px;font-size:13px;padding:8px 8px}
+.gatenote{font-size:12px;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:7px 10px;margin:0 0 10px;line-height:1.45}
+.gatefile{font-size:11.5px;color:var(--muted);margin:-4px 0 12px}
+.gatefile code{font-family:var(--mono);color:var(--ink)}
+.gatefile.bad{color:var(--loss)}
+.gate .impmode{margin-top:6px}
+.gate .impmode small.vp{font-size:11px}
+.gateback{display:block;text-align:center;margin-top:12px;font-size:12.5px;background:none;border:0;color:var(--brass);cursor:pointer;width:100%;font-family:var(--sans)}
+.lockbox .vname{font-size:14px;color:#fff;font-weight:600;margin:-2px 0 8px;display:flex;align-items:center;gap:7px;word-break:break-all}
+.lockbox .vname::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--brass-hi);flex:none}
+.lockbox button+button{margin-top:6px}
+.swstat{background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.swstat div{display:flex;gap:8px;align-items:center}
+.swstat i{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+.swstat i.ok{background:var(--gain)} .swstat i.warn{background:var(--warn)}
+.swblock{background:var(--loss-soft);border:1px solid #E8C4C1;border-radius:8px;padding:12px 13px;font-size:13px;line-height:1.5}
+.swblock b.t{color:var(--loss)}
+.swblock .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.swopt{display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:13px;cursor:pointer}
+.swopt input{width:auto;margin-top:3px;accent-color:var(--brass)}
+.swopt small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;margin-top:2px}
+.swlabel{font-size:12px;color:var(--muted);font-weight:550;margin:16px 0 0}
+.impmode.off{opacity:.55;cursor:not-allowed}
+.impmode .vp{font-family:var(--mono);font-size:11px;word-break:break-all}
+.swmsg{color:var(--loss);font-size:12.5px;margin-top:10px}
+.swnext{font-size:11.5px;color:var(--faint);text-align:right;margin-top:8px}
+.vrows{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2.4fr) 130px 130px auto;gap:6px 14px;font-size:13px;align-items:center}
+.vrows .h{font-size:11px;color:var(--muted);font-weight:650;text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px;border-bottom:1px solid var(--line-2)}
+.vrows .nm{font-weight:600;display:flex;gap:7px;align-items:center;word-break:break-all}
+.vrows .nm i{width:7px;height:7px;border-radius:50%;background:var(--line);flex:none}
+.vrows .nm i.on{background:var(--brass-hi)}
+.vrows .p{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+.vrows .t{font-family:var(--mono);font-size:12px}
+.vrows .t.warn{color:var(--warn)}
+.vrows .a{display:flex;gap:6px;justify-content:flex-end}
+@media (max-width:1100px){.vrows{grid-template-columns:1fr 1fr}.vrows .h{display:none}}
+/* merge tray (v6.2): a card pinned into the sticky Library header, so other cards
+   can be dropped onto it from anywhere in a long list */
+.vpin{position:absolute;top:8px;left:40px;z-index:2;width:26px;height:26px;border-radius:7px;border:0;padding:0;background:rgba(22,32,43,.62);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.55;transition:opacity .12s}
+.vpin:hover{background:rgba(22,32,43,.85)}
+.pcard:hover .vpin,.vpin:focus-visible{opacity:1}
+.vpin.on,.vpin.on:hover{background:var(--brass);opacity:1}
+.pcard.tray-on{outline:2px solid var(--brass-hi);outline-offset:-2px}
+.mtray{display:flex;align-items:center;gap:14px;margin:12px 0 6px;padding:9px 12px;background:var(--surface);border:2px dashed var(--brass);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.mtray.drop-ok{background:var(--brass-soft);border-style:solid}
+.mtray.drop-full{border-color:var(--loss);background:var(--loss-soft)}
+.mtray.drop-ok *,.mtray.drop-full *{pointer-events:none}
+.mtray .mt-img,.mtray .mt-img.mf-empty{width:64px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block;flex:none}
+.mtray .mf-empty{background:var(--surface-2);border-style:dashed}
+.mt-info{min-width:0;flex:0 1 340px}
+.mt-snip{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt-n{font-size:12px;color:var(--muted)}
+.mt-strip{display:flex;gap:4px;flex:1;min-width:0;overflow:hidden}
+.mt-strip img,.mt-strip .mf-empty{width:30px;height:23px;object-fit:cover;border-radius:4px;border:1px solid var(--line);display:block;flex:none}
+.mt-sep{width:1px;height:23px;background:var(--line);margin:0 3px;flex:none}
+.mt-q{position:relative;flex:none;display:block}
+.mt-q img,.mt-q .mf-empty{outline:2px dashed var(--brass);outline-offset:-1px}
+.mt-q b{position:absolute;left:2px;bottom:2px;background:rgba(22,32,43,.78);color:#fff;font-size:9.5px;line-height:1;padding:2px 3px;border-radius:3px;pointer-events:none}
+.mt-q button{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;border:0;padding:0;background:var(--ink);color:#fff;font-size:9px;line-height:16px;cursor:pointer;opacity:0;transition:opacity .1s}
+.mt-q:hover button,.mt-q button:focus-visible{opacity:1}
+.mt-strip{padding:6px 6px 0 0;margin-top:-6px}
+/* queued card in the grid (v6.4): dimmed, dashed brass outline, and its queue position */
+.pcard.queued:not(.drop-ok):not(.drop-full){outline:2px dashed var(--brass);outline-offset:-2px}
+.pcard.queued .thumb,.pcard.queued .thumb-empty,.pcard.queued .body,.pcard.queued .foot{opacity:.45}
+.qbadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;background:var(--brass);color:#fff;font-size:12.5px;font-weight:700;padding:6px 13px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(16,22,30,.3)}
+.mergerow.cardstart{border-top:1px solid var(--line-2);padding-top:8px}
+.mt-drop{font-size:13px;font-weight:650;color:var(--brass);white-space:nowrap}
+.mt-drop .ok,.mt-drop .full,.mtray.drop-ok .mt-drop .idle,.mtray.drop-full .mt-drop .idle{display:none}
+.mtray.drop-ok .mt-drop .ok{display:inline}
+.mtray.drop-full .mt-drop .full{display:inline;color:var(--loss)}
 
 /* lightbox */
 .lbvchip{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A5F1F;font-weight:700;background:var(--brass-soft);border-radius:5px;padding:2px 7px}
@@ -328,15 +464,20 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brass-soft);bord
 
 <div id="gateRoot" hidden></div>
 <div id="savealert" class="savealert" hidden></div>
+<div id="busy" class="busy" hidden role="status" aria-live="polite"><div class="busypill"><span class="spin" aria-hidden="true"></span><span id="busyText">Working…</span></div></div>
 <div id="toast" class="toast"></div>
 <div id="modalRoot"></div>
+<div id="viewerRoot"></div>
 <div id="ctxRoot"></div>
 
 <script>
 /* ============================ constants ============================ */
-let APP_VERSION='6.1', APP_BUILD='2026-11-02';   // authoritative values come from Python
+let APP_VERSION='6.8', APP_BUILD='2026-11-03';   // authoritative values come from Python
 let vaultPath='';      // reported by Python at boot
 let vaultExists=false;
+/* v6.7 alternate vaults: one open at a time. Python keeps the list (paths and
+   timestamps, in the settings file); these mirror the last status() it sent. */
+let vaultName='', vaultKnown=false, vaultsDir='', vaultList=[];
 const SEAL_SVG=`<svg class="seal" role="img" aria-label="Smaller Hammer logo" viewBox="0 0 1075.454968 1176.557847" xmlns="http://www.w3.org/2000/svg"><path transform="translate(-87.806878,1221.697957) scale(0.100000,-0.100000)" d="M6956 12209 c-102 -24 -281 -133 -453 -276 -126 -104 -325 -308 -433 -443 -268 -335 -471 -748 -542 -1100 -31 -157 -32 -451 -1 -610 11 -58 20 -106 18 -108 -1 -1 -42 9 -91 23 -49 15 -133 31 -186 37 -75 9 -95 14 -88 24 24 28 60 141 60 186 0 83 -55 115 -180 106 -80 -6 -187 -60 -276 -140 -39 -36 -61 -51 -52 -36 72 112 111 188 116 225 4 37 1 46 -25 72 -42 42 -99 48 -202 22 -153 -38 -319 -145 -416 -269 -52 -65 -121 -196 -131 -247 -3 -19 -8 -35 -10 -35 -2 0 -32 23 -66 50 -87 70 -262 155 -383 187 -141 36 -318 36 -457 0 -322 -84 -641 -305 -998 -689 -507 -546 -1063 -1414 -1214 -1895 -85 -271 -91 -517 -16 -664 134 -262 609 -223 1070 86 446 300 746 690 1123 1460 174 356 188 384 184 360 -17 -81 -145 -513 -181 -610 -140 -381 -294 -640 -558 -938 -109 -124 -127 -170 -109 -279 12 -76 56 -182 97 -235 14 -19 24 -35 23 -37 -2 -1 -31 -10 -64 -20 -247 -75 -558 -273 -790 -502 -191 -189 -332 -384 -441 -609 -187 -387 -225 -726 -102 -909 13 -18 36 -51 51 -73 l28 -41 -17 -83 c-31 -153 10 -328 97 -417 61 -62 115 -86 194 -87 61 0 72 -3 88 -23 11 -12 42 -35 70 -50 46 -24 63 -27 147 -27 88 0 101 3 162 33 37 18 80 49 96 68 26 32 34 35 73 32 l43 -3 -58 -62 c-42 -46 -79 -73 -134 -100 -73 -36 -80 -38 -176 -38 -91 0 -107 3 -161 29 -50 25 -70 29 -122 27 -104 -5 -166 20 -246 101 -37 37 -74 68 -82 68 -39 0 -103 -139 -140 -309 -88 -392 -50 -752 116 -1084 72 -144 140 -238 264 -362 120 -121 234 -203 382 -275 50 -25 92 -48 92 -51 1 -4 -18 -9 -41 -13 -66 -11 -238 -71 -320 -112 -177 -89 -310 -210 -374 -339 -34 -68 -39 -90 -42 -160 -3 -67 0 -89 16 -121 63 -121 237 -195 467 -198 109 -1 123 -3 149 -23 61 -49 230 -68 516 -60 361 11 666 56 907 135 337 111 623 326 623 469 0 46 -18 90 -44 112 -32 27 -14 28 87 5 383 -87 879 -90 1297 -8 69 13 129 24 134 24 4 0 -6 -16 -22 -35 -35 -39 -48 -87 -38 -140 10 -51 119 -163 236 -240 304 -203 670 -307 1125 -322 271 -8 432 15 469 68 12 18 19 19 85 8 136 -21 339 26 437 100 26 20 58 56 71 81 22 40 24 56 21 135 -2 76 -8 100 -34 155 -98 206 -357 379 -694 463 l-55 13 110 57 c155 80 283 174 405 297 285 287 445 640 522 1150 20 132 17 545 -5 700 -71 494 -209 908 -412 1243 -19 31 -32 57 -29 57 3 0 25 -17 49 -38 137 -121 403 -99 522 44 31 36 42 43 87 49 145 19 284 140 337 292 11 32 23 93 26 135 l6 78 326 129 c441 174 470 185 476 179 3 -2 36 -98 75 -211 38 -114 77 -218 85 -231 33 -49 71 -51 208 -12 197 56 469 154 494 178 13 12 28 39 33 59 12 43 -12 123 -227 754 -58 171 -117 346 -130 390 -29 92 -73 145 -121 145 -77 0 -365 -96 -554 -184 -130 -61 -138 -90 -74 -267 55 -152 63 -184 44 -192 -148 -59 -761 -313 -782 -324 -28 -14 -30 -14 -75 30 -192 186 -620 351 -993 383 -43 3 -78 8 -78 10 0 2 18 27 41 56 55 73 154 276 181 373 29 109 32 327 4 430 -23 89 -81 214 -137 296 -59 87 -221 252 -295 301 l-60 40 -54 136 c-147 379 -303 643 -502 847 l-88 92 61 11 c72 13 110 43 289 222 510 510 742 1080 716 1755 -13 357 -93 752 -191 946 -63 124 -141 165 -259 138z M10745 6691 c-11 -5 -28 -17 -37 -27 -9 -11 -66 -145 -127 -299 -60 -154 -119 -302 -130 -328 -32 -74 -26 -106 18 -92 28 9 421 632 421 667 0 62 -80 105 -145 79z M11195 6318 c-45 -25 -588 -454 -602 -475 -17 -26 -10 -43 18 -43 43 0 679 337 704 373 33 47 12 113 -45 142 -34 18 -48 18 -75 3z M10985 5690 c-343 -35 -359 -38 -363 -67 -2 -14 3 -23 15 -27 19 -6 321 -37 550 -57 78 -6 153 -9 167 -5 67 17 91 112 41 161 -31 32 -46 31 -410 -5z M9890 5570 c-97 -12 -150 -29 -176 -55 -23 -23 -24 -30 -24 -172 0 -146 -1 -148 -19 -124 l-19 24 -43 -26 c-72 -42 -174 -132 -245 -214 -315 -369 -497 -920 -497 -1503 0 -373 73 -691 229 -989 136 -262 353 -498 587 -640 101 -62 101 -62 137 9 17 34 33 60 35 58 2 -2 -20 -77 -50 -166 l-53 -162 -3 -532 c-2 -374 0 -539 8 -553 6 -11 23 -31 38 -45 26 -25 30 -25 213 -28 212 -3 233 2 266 73 17 34 17 63 6 453 -18 632 -17 627 -79 825 -29 93 -51 170 -48 173 2 3 26 -31 51 -75 56 -98 61 -99 183 -35 145 75 274 182 395 323 273 322 413 675 449 1134 28 363 -38 796 -172 1134 -86 217 -227 447 -362 589 -83 88 -199 184 -223 184 -7 0 -20 -10 -28 -22 -15 -21 -16 -11 -16 130 0 147 -1 154 -23 176 -35 35 -148 57 -312 61 -77 2 -169 0 -205 -5z M8781 2106 c-180 -84 -311 -151 -322 -165 -18 -22 -19 -52 -19 -692 l0 -668 22 -15 c12 -9 30 -16 39 -16 19 0 1106 537 1114 550 7 11 43 357 52 495 l6 100 -89 71 c-110 88 -255 238 -364 378 -69 87 -88 106 -109 105 -14 0 -163 -64 -330 -143z M10909 2168 c-122 -157 -342 -363 -489 -459 -18 -12 -24 -25 -24 -50 1 -19 4 -150 8 -292 7 -217 11 -261 25 -276 9 -11 108 -63 221 -117 113 -53 360 -170 549 -260 189 -90 356 -164 371 -164 15 0 35 9 46 21 17 19 18 48 15 687 -1 392 -6 673 -12 684 -11 21 -592 308 -623 308 -16 0 -41 -24 -87 -82z" fill="var(--brass-hi)" fill-rule="evenodd"/></svg>`;
 /* Raised from 640/0.82 in v5.3, now that storage is a file rather than a ~5MB
    browser quota. 1280 makes the lightbox genuinely readable instead of merely
@@ -358,6 +499,7 @@ let sessionUnlocked=false;
 let view='library';
 let state={search:'', tagFilters:[]};
 let storageAlert=null;      // text of the persistent 'not saved' banner, or null
+let saveFailed=false;       // v6.7: the LAST vault save failed (the banner also carries export errors)
 /* Which rollups are open. UI state, NOT vault data — it lives in the settings
    file, so expanding a category writes ~200 bytes instead of re-encrypting and
    rotating the whole vault. Python owns the copy on disk; this is the mirror. */
@@ -383,7 +525,8 @@ let lightboxState={items:[], index:0, cardChanged:false};          // items: [ca
 async function saveDB(){
   if(!db) return false;
   const r=await call('save', JSON.stringify(db));
-  if(r.ok){ setStorageAlert(null); return true; }
+  if(r.ok){ saveFailed=false; setStorageAlert(null); return true; }
+  saveFailed=true;
   setStorageAlert('NOT SAVED — '+(r.error||'storage error')+'. Your changes exist only in this window. Export a backup now.');
   return false;
 }
@@ -413,13 +556,280 @@ function apiReady(){
     setTimeout(()=>res(!!api()), 8000);
   });
 }
+/* ---- busy indicator (v6.3) ----
+   Every bridge call that writes the vault or does slow crypto shows the busy pill
+   for as long as it runs (BUSY_CALLS); other slow work (image processing) calls
+   busyStart/busyEnd itself. A counter allows overlapping jobs. The pill appears at
+   once, so a click is visibly accepted, and stays at least BUSY_MIN_MS so a fast
+   save reads as a deliberate flash rather than a flicker. Settings-only writes
+   (expand state, display prefs) are tiny and deliberately not shown. */
+const BUSY_CALLS={save:'Saving…', create_vault:'Creating vault…', unlock:'Unlocking…',
+  change_pin:'Changing passphrase…', export_backup:'Exporting backup…', import_backup:'Importing…',
+  read_backup:'Reading backup…', switch_backup:'Backing up…'};
+const BUSY_MIN_MS=350;
+let busyCount=0, busyShownAt=0, busyHideT=null;
+function busyStart(label){
+  busyCount++;
+  const el=document.getElementById('busy'); if(!el) return;
+  const t=document.getElementById('busyText'); if(t) t.textContent=label||'Working…';
+  if(busyHideT){ clearTimeout(busyHideT); busyHideT=null; }
+  el.classList.remove('tail');
+  if(el.hidden){ el.hidden=false; busyShownAt=Date.now(); }
+}
+function busyEnd(){
+  busyCount=Math.max(0, busyCount-1);
+  if(busyCount) return;
+  const el=document.getElementById('busy'); if(!el) return;
+  el.classList.add('tail');
+  const wait=Math.max(0, BUSY_MIN_MS-(Date.now()-busyShownAt));
+  if(busyHideT) clearTimeout(busyHideT);
+  busyHideT=setTimeout(()=>{ busyHideT=null; if(!busyCount) el.hidden=true; }, wait);
+}
+// While a job runs, keys must not start another one (Enter on a dialog, say).
+document.addEventListener('keydown', e=>{ if(busyCount){ e.preventDefault(); e.stopPropagation(); } }, true);
 async function call(name, ...args){
   const a=api();
   if(!a) return {ok:false, error:'Desktop bridge unavailable — run this through app.py, not a browser.'};
+  const label=BUSY_CALLS[name];
+  if(label) busyStart(label);
   try{ return await a[name](...args); }
   catch(e){ return {ok:false, error:String(e && e.message || e)}; }
+  finally{ if(label) busyEnd(); }
 }
-function lockNow(){ call('lock'); db=null; sessionUnlocked=false; render(); }
+function lockNow(){ closeImageViewer(); call('lock'); db=null; sessionUnlocked=false; trayId=null; trayQueue=[]; render(); }
+
+/* ============================ vaults (v6.7) ============================
+   Several vault files, one open at a time, each with its own passphrase.
+   The gate offers the last-used vault with a picker; inside the app, Switch
+   vault runs the pre-switch checks, locks this vault, and lands on the gate
+   for the next one. Python only swaps vaults while locked (select_vault), so
+   an unlocked session is never changed underneath. A vault's name is its file
+   name; Python validates new names so they are legal file names everywhere. */
+let gateMode=null;          // null = from the vault's state; 'newvault' = the create form
+let gateNote='';            // warning shown on the gate (another copy has the vault open)
+let newVaultDraft={name:'', folder:null};   // folder null = the vaults folder beside the app
+let switchState=null;       // {target, backup, discard, exported, msg, backupDir} while the dialog is open
+function applyStatus(st){
+  if(!st) return;
+  if(st.vaultPath!=null) vaultPath=st.vaultPath;
+  if(st.vaultName!=null) vaultName=st.vaultName;
+  if(st.exists!=null) vaultExists=!!st.exists;
+  if(st.known!=null) vaultKnown=!!st.known;
+  if(st.vaultsDir!=null) vaultsDir=st.vaultsDir;
+  if(Array.isArray(st.vaults)) vaultList=st.vaults;
+}
+async function refreshVaultStatus(){ const st=await call('status'); if(st.ok) applyStatus(st); return st; }
+function lockNoteFor(lock){
+  return lock && !lock.stale
+    ? 'This vault appears to be open already: '+lock.host+' (pid '+lock.pid+') since '+lock.since+'. Two copies writing to one vault will lose work.'
+    : '';
+}
+/* client-side mirror of Python's vault_file_name(), for the live hint only;
+   Python's check is the one that counts */
+const VAULT_RESERVED=new Set(['CON','PRN','AUX','NUL',...[0,1,2,3,4,5,6,7,8,9].flatMap(i=>['COM'+i,'LPT'+i])]);
+function vaultNameProblem(raw){
+  const n=String(raw||'').trim();
+  if(!n) return 'Give the vault a name.';
+  if(n.length>60) return 'Keep the name to 60 characters or fewer.';
+  if(!/^[A-Za-z0-9][A-Za-z0-9 _-]*$/.test(n)) return 'Use letters, digits, spaces, - and _ only, starting with a letter or digit.';
+  if(/ {2}/.test(n)) return 'Use single spaces between words.';
+  if(VAULT_RESERVED.has(n.toUpperCase())) return '“'+n+'” is reserved by Windows. Choose another name.';
+  if(vaultList.some(v=>v.name.toLowerCase()===n.toLowerCase())) return 'A vault called “'+n+'” is already in your list.';
+  return '';
+}
+
+/* ---- gate: picker ---- */
+function gatePickerHTML(mode){
+  if(mode==='newvault') return '';
+  const opts=vaultList.map((v,i)=>`<option value="${i}" ${v.current?'selected':''}>${esc(v.name)}${!v.exists&&v.known?' — not found':''}${v.opened?' · last opened '+esc(v.opened):''}</option>`).join('');
+  const extra=(mode==='create'?'':'<option value="new">＋ Create a new vault…</option>')
+    +'<option value="open">Open a vault file…</option>';
+  return `<label class="gl" for="gateVault">Vault</label>
+    <select id="gateVault" class="gatesel" onchange="gatePick(this.value)">${opts}<option disabled>──────────</option>${extra}</select>`;
+}
+async function gatePick(v){
+  if(v==='new'){ gateMode='newvault'; gateNote=''; newVaultDraft={name:'', folder:null}; render(); return; }
+  if(v==='open'){
+    const r=await call('add_vault_file');
+    if(r.ok){ await pickVault(r.path); if(r.already) gateMsg('That vault was already in the list.'); return; }
+    render();                                  // puts the picker back on the current vault
+    if(r.error) gateMsg(r.error);
+    return;
+  }
+  const t=vaultList[+v]; if(t) await pickVault(t.path);
+}
+async function pickVault(path){
+  const r=await call('select_vault', path);
+  if(!r.ok){ render(); gateMsg(r.error||'Could not choose that vault.'); return false; }
+  applyStatus(r); gateMode=null; gateNote=lockNoteFor(r.lock); render();
+  return true;
+}
+async function retryMissing(){ await refreshVaultStatus(); render(); if(!vaultExists) gateMsg('Still not found.'); }
+
+/* ---- gate: new vault ---- */
+function newVaultHTML(){
+  const d=newVaultDraft, prob=d.name?vaultNameProblem(d.name):'';
+  const loc=(own,title,text,isPath)=>`<label class="impmode${(d.folder!=null)===own?' on':''}"><input type="radio" name="vloc" ${(d.folder!=null)===own?'checked':''} onchange="${own?'chooseNewVaultFolder()':'newVaultDraft.folder=null;captureNewVault();render()'}"><span><b>${title}</b><small${isPath?' class="vp"':''}>${esc(text)}</small></span></label>`;
+  return `<label class="gl" for="gateName">Name</label>
+    <input id="gateName" type="text" maxlength="60" value="${esc(d.name)}" placeholder="e.g. portraits" oninput="newVaultDraft.name=this.value;refreshNewVaultHint()" onkeydown="if(event.key==='Enter')$('#gatePin').focus()">
+    <div id="gateFile" class="gatefile${prob?' bad':''}">${newVaultHint()}</div>
+    <label class="gl">Location</label>
+    ${loc(false,'Vaults folder beside the app', vaultsDir||'vaults', true)}
+    ${loc(true, d.folder?'Chosen folder':'Choose a folder…', d.folder||'Local disk recommended; for a network share, keep encrypted backups too', !!d.folder)}
+    <div style="height:12px"></div>`;
+}
+function newVaultHint(){
+  const n=newVaultDraft.name.trim();
+  if(!n) return 'Letters, digits, spaces, - and _ · it becomes the file name';
+  const p=vaultNameProblem(n);
+  return p?esc(p):`File: <code>${esc(n)}.vault</code>`;
+}
+function refreshNewVaultHint(){
+  const el=$('#gateFile'); if(!el) return;
+  el.innerHTML=newVaultHint();
+  el.classList.toggle('bad', !!(newVaultDraft.name.trim() && vaultNameProblem(newVaultDraft.name)));
+}
+function captureNewVault(){ const f=$('#gateName'); if(f) newVaultDraft.name=f.value; }
+async function chooseNewVaultFolder(){
+  captureNewVault();
+  const r=await call('choose_vault_folder');
+  if(r.ok) newVaultDraft.folder=r.path;
+  render();
+}
+function leaveNewVault(){ gateMode=null; render(); }
+
+/* ---- in the app: switch ---- */
+async function openSwitchModal(target){
+  const [lv, gs]=await Promise.all([call('list_vaults'), call('get_settings')]);
+  if(lv.ok) vaultList=lv.vaults||vaultList;
+  const s=(gs.ok&&gs.settings)||{};
+  const cur=vaultList.find(v=>v.current)||{};
+  const firstOther=vaultList.find(v=>!v.current && v.exists);
+  switchState={target: target || (firstOther?firstOther.path:'new'),
+    backup: cur.changedSinceBackup!==false, discard:false, exported:false, msg:'',
+    backupDir: s.backup_dir||s.last_backup_dir||''};
+  renderSwitchModal();
+}
+function switchBlocked(){ const st=switchState; return !!(saveFailed && !st.exported && !st.discard); }
+function renderSwitchModal(){
+  const st=switchState; if(!st) return;
+  const cur=vaultList.find(v=>v.current)||{name:vaultName};
+  const failed=saveFailed, blocked=switchBlocked();
+  const queued=(typeof queueLive==='function' && trayId)?queueLive().length:0;
+  const stamp=new Date(), pad=n=>String(n).padStart(2,'0');
+  const fname=`${cur.name}-encrypted-${stamp.getFullYear()}-${pad(stamp.getMonth()+1)}-${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.json.gz`;
+  const sep=/\//.test(st.backupDir)&&!/\\/.test(st.backupDir)?'/':'\\';
+  const lines=[];
+  if(!failed) lines.push(['ok','Every change is saved to disk']);
+  lines.push(cur.changedSinceBackup
+    ? ['warn', cur.backup?'Changed since its last backup ('+esc(cur.backup)+')':'Never backed up']
+    : ['ok', 'Backed up '+esc(cur.backup||'')+' · no changes since']);
+  if(queued) lines.push(['', `Merge tray has ${queued} queued card${queued===1?'':'s'} — the queue is dropped`]);
+  else if(trayId) lines.push(['', 'The merge tray closes']);
+  const others=vaultList.filter(v=>!v.current);
+  const tgt=(v)=>{
+    const on=st.target===v.path, off=!v.exists;
+    const i=vaultList.indexOf(v);
+    return `<label class="impmode${on?' on':''}${off?' off':''}"><input type="radio" name="swtgt" ${on?'checked':''} ${off?'disabled':''} onchange="switchState.target=vaultList[${i}].path;renderSwitchModal()"><span><b>${esc(v.name)}${off?' — file not found':''}</b><small class="vp">${esc(v.path)}</small></span></label>`;
+  };
+  const newOn=st.target==='new';
+  const go=!blocked && st.target && (st.target==='new' || others.some(v=>v.path===st.target&&v.exists));
+  const doBackup=st.backup && !failed;
+  const tName=st.target==='new'?'the new vault':esc((vaultList.find(v=>v.path===st.target)||{}).name||'');
+  $('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)closeSwitchModal()">
+   <div class="modal" style="width:min(520px,96vw)" role="dialog" aria-label="Switch vault">
+    <div class="mh"><h3>Switch vault</h3><button class="iconbtn" aria-label="Close" onclick="closeSwitchModal()">✕</button></div>
+    <div class="sub" style="margin:0 0 12px">Leaving <b style="color:var(--ink)">${esc(cur.name)}</b>. It is locked before the other vault opens.</div>
+    ${failed && !st.exported ? `<div class="swblock" id="swBlock"><b class="t">The last save failed.</b> This window holds changes the vault file does not. Switching now would lose them.
+        <div class="acts"><button class="btn brass sm" onclick="switchRetrySave()">Retry save</button>
+          <button class="btn sm" onclick="switchExport()">↓ Export encrypted backup…</button></div></div>
+      <label class="swopt"><input type="checkbox" id="swDiscard" ${st.discard?'checked':''} onchange="switchState.discard=this.checked;renderSwitchModal()"><span>Switch anyway and <b style="color:var(--loss)">discard the unsaved changes</b></span></label>`
+    : failed ? `<div class="swstat"><div><i class="ok"></i><span>This window's contents were exported · the vault file is behind them</span></div></div>`
+    : `<div class="swstat">${lines.map(([c,t])=>`<div><i class="${c}"></i><span>${t}</span></div>`).join('')}</div>
+      <label class="swopt"><input type="checkbox" id="swBackup" ${st.backup?'checked':''} onchange="switchState.backup=this.checked;renderSwitchModal()"><span><b>Export an encrypted backup first</b>
+        <small>${st.backupDir?esc(st.backupDir+sep+fname):'No backup folder set — you will be asked where to save it'}</small></span></label>`}
+    <div class="swlabel">Open</div>
+    ${others.map(tgt).join('')}
+    <label class="impmode${newOn?' on':''}"><input type="radio" name="swtgt" ${newOn?'checked':''} onchange="switchState.target='new';renderSwitchModal()"><span><b>＋ Create a new vault</b><small style="font-family:var(--sans)">Name, folder and passphrase on the next screen</small></span></label>
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="switchAddFile()">Add a vault file…</button></div>
+    ${st.msg?`<div class="swmsg" id="swMsg">${esc(st.msg)}</div>`:''}
+    <div class="foot"><button class="btn" onclick="closeSwitchModal()">Cancel</button>
+      <button class="btn brass" id="swGo" ${go?'':'disabled'} onclick="confirmSwitch()">${doBackup?'Back up &amp; switch':'Switch'}</button></div>
+    <div class="swnext">${go?`Next: the unlock screen for ${tName}.`:blocked?'Switch unlocks once a retry succeeds, a backup is exported, or discard is ticked.':''}</div>
+   </div></div>`;
+}
+function closeSwitchModal(){ switchState=null; closeModal(); }
+async function switchRetrySave(){ await saveDB(); renderSwitchModal(); }
+async function switchExport(){ if(await exportBackup(true)){ switchState.exported=true; } renderSwitchModal(); }
+async function switchAddFile(){
+  const r=await call('add_vault_file');
+  if(!switchState) return;
+  if(r.ok){
+    vaultList=r.vaults||vaultList;
+    const v=vaultList.find(x=>x.path===r.path);
+    if(v && v.current){ switchState.msg='That is the vault you have open.'; }
+    else { switchState.target=r.path; switchState.msg=r.already?'That vault was already in the list.':''; }
+  } else if(r.error) switchState.msg=r.error;
+  renderSwitchModal();
+}
+async function confirmSwitch(){
+  const st=switchState; if(!st || switchBlocked()) return;
+  let backedUp='';
+  if(st.backup && !saveFailed){
+    let r=await call('switch_backup', JSON.stringify(db));
+    if(r.needDir){
+      r=await call('export_backup', true, JSON.stringify(db));
+      if(r.cancelled){ st.msg='Backup cancelled — not switched. Untick the backup to switch without one.'; renderSwitchModal(); return; }
+    }
+    if(!r.ok){ st.msg='Backup failed — '+(r.error||'unknown error')+'. Not switched.'; renderSwitchModal(); return; }
+    backedUp=r.path;
+  }
+  const target=st.target;
+  switchState=null; closeModal();
+  await leaveVault();
+  if(target==='new'){ gateMode='newvault'; gateNote=''; newVaultDraft={name:'', folder:null}; render(); }
+  else if(!await pickVault(target)) { /* pickVault rendered the gate with the reason */ }
+  if(backedUp) toast('Backup written to '+backedUp);
+}
+/* Lock this vault and forget everything that belonged to it. Unlike lockNow()
+   it waits for Python, because select_vault is refused while unlocked. */
+async function leaveVault(){
+  closeImageViewer();
+  await call('lock');
+  db=null; sessionUnlocked=false; trayId=null; trayQueue=[];
+  state={search:'', tagFilters:[]}; expandedCats={}; view='library';
+  saveFailed=false; setStorageAlert(null);
+}
+
+/* ---- Data & Security › Vaults ---- */
+function vaultsCardHTML(){
+  if(!vaultList.length) return '<div class="sub" style="margin:0">…</div>';
+  return `<div class="vrows"><div class="h">Name</div><div class="h">File</div><div class="h">Last opened</div><div class="h">Last backup</div><div class="h"></div>
+    ${vaultList.map((v,i)=>`<div class="nm"><i class="${v.current?'on':''}"></i>${esc(v.name)}</div>
+      <div class="p">${esc(v.path)}${v.exists?'':' <b style="color:var(--loss);font-family:var(--sans)">· not found</b>'}</div>
+      <div class="t">${v.current?'open now':esc(v.opened||'—')}</div>
+      <div class="t${v.changedSinceBackup?' warn':''}">${esc(v.backup||'never')}</div>
+      <div class="a"><button class="btn sm" onclick="revealVault(${i})">Open folder</button>
+        ${v.current?'<button class="btn ghost sm" disabled>In use</button>':`<button class="btn ghost sm" onclick="forgetVault(${i})">Remove from list</button>`}</div>`).join('')}
+  </div>`;
+}
+async function refreshVaultsCard(){
+  const r=await call('list_vaults');
+  if(r.ok) vaultList=r.vaults||vaultList;
+  const el=document.getElementById('vaultsCard'); if(el) el.innerHTML=vaultsCardHTML();
+}
+async function forgetVault(i){
+  const v=vaultList[i]; if(!v) return;
+  const r=await call('forget_vault', v.path);
+  if(!r.ok){ toast(r.error||'Could not remove it'); return; }
+  vaultList=r.vaults||vaultList; refreshVaultsCard();
+  toast('Removed '+v.name+' from the list — the file stays on disk');
+}
+async function addVaultFromData(){
+  const r=await call('add_vault_file');
+  if(r.ok){ vaultList=r.vaults||vaultList; refreshVaultsCard(); toast(r.already?r.name+' is already in the list':'Added '+r.name+' to the list'); }
+  else if(r.error) toast(r.error);
+}
 
 
 /* ============================ image handling ============================ */
@@ -428,7 +838,10 @@ function lockNow(){ call('lock'); db=null; sessionUnlocked=false; render(); }
 // preserved. A reference copy of what the prompt produced, not an archival original.
 // Images already stored at an older cap are left alone — re-upload to re-encode.
 function resizeImageFile(file, cb){
+  busyStart('Processing image…');
+  let done=false; const finish=()=>{ if(!done){ done=true; busyEnd(); } };
   const reader=new FileReader();
+  reader.onerror=()=>{ finish(); toast('Could not read that image'); };
   reader.onload=()=>{
     const img=new Image();
     img.onload=()=>{
@@ -438,9 +851,9 @@ function resizeImageFile(file, cb){
       }
       const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
       canvas.getContext('2d').drawImage(img,0,0,w,h);
-      cb({data:canvas.toDataURL('image/jpeg', IMG_QUALITY), w, h});
+      try{ cb({data:canvas.toDataURL('image/jpeg', IMG_QUALITY), w, h}); } finally { finish(); }
     };
-    img.onerror=()=>toast('Could not read that image');
+    img.onerror=()=>{ finish(); toast('Could not read that image'); };
     img.src=reader.result;
   };
   reader.readAsDataURL(file);
@@ -498,9 +911,11 @@ let dragCardId=null;
 function canMerge(srcId, tgtId){
   if(!db || !srcId || srcId===tgtId) return false;
   const s=db.prompts.find(x=>x.id===srcId), t=db.prompts.find(x=>x.id===tgtId);
-  return !!(s && t && vCount(s)+vCount(t)<=MAX_VARIANTS);
+  // v6.4: prompts queued for the pinned card are spoken for
+  const held=(tgtId===trayId) ? queueLive().filter(q=>q.id!==srcId).reduce((a,q)=>a+vCount(q),0) : 0;
+  return !!(s && t && vCount(s)+vCount(t)+held<=MAX_VARIANTS);
 }
-function clearDropMarks(){ document.querySelectorAll('.pcard.drop-ok,.pcard.drop-full').forEach(el=>el.classList.remove('drop-ok','drop-full')); }
+function clearDropMarks(){ document.querySelectorAll('.pcard.drop-ok,.pcard.drop-full,.mtray.drop-ok,.mtray.drop-full').forEach(el=>el.classList.remove('drop-ok','drop-full')); }
 function onCardDragStart(e, id){
   e.stopPropagation();
   dragCardId=id;
@@ -509,7 +924,7 @@ function onCardDragStart(e, id){
   if(el){ try{ e.dataTransfer.setDragImage(el, 24, 24); }catch(_){} setTimeout(()=>el.classList.add('dragging'), 0); }
 }
 function onCardDragEnd(){
-  dragCardId=null; clearDropMarks();
+  dragCardId=null; clearDropMarks(); stopAutoScroll();
   document.querySelectorAll('.pcard.dragging').forEach(el=>el.classList.remove('dragging'));
 }
 function onCardDragOver(e, id){
@@ -570,6 +985,16 @@ function openMergeModal(srcId, tgtId){
   </div>`;
   const f=$('#mg_name_0'); if(f){ f.focus(); f.select(); }
 }
+// One prompt of a source card, reshaped as a variant of another card. The source
+// primary gets a fresh id and keeps its createdAt; its variants keep their ids.
+function incomingVariant(s, j, name, now){
+  const v=vAt(s,j);
+  const o={ id: (j>0 && v.id) ? v.id : 'v'+uid().slice(1), createdAt: (j>0 ? v.createdAt : s.createdAt) || now,
+    label:(name==null ? (v.label||'') : name).trim(), promptText:v.promptText||'', negativePrompt:v.negativePrompt||'',
+    seed:v.seed||'', width:v.width||null, height:v.height||null, comments:v.comments||'', image:imageFor(v) };
+  if(!o.label) delete o.label;
+  return o;
+}
 async function confirmMerge(){
   const st=mergeState; if(!st) return;
   const s=db.prompts.find(x=>x.id===st.srcId), t=db.prompts.find(x=>x.id===st.tgtId);
@@ -579,12 +1004,8 @@ async function confirmMerge(){
   const now=new Date().toISOString();
   const tagBox=$('#mg_tags');
   const incoming=Array.from({length:ns},(_,j)=>{
-    const v=vAt(s,j), el=document.getElementById('mg_name_'+j);
-    const o={ id: (j>0 && v.id) ? v.id : 'v'+uid().slice(1), createdAt: (j>0 ? v.createdAt : s.createdAt) || now,
-      label:(el ? el.value : (v.label||'')).trim(), promptText:v.promptText||'', negativePrompt:v.negativePrompt||'',
-      seed:v.seed||'', width:v.width||null, height:v.height||null, comments:v.comments||'', image:imageFor(v) };
-    if(!o.label) delete o.label;
-    return o;
+    const el=document.getElementById('mg_name_'+j);
+    return incomingVariant(s, j, el ? el.value : null, now);
   });
   t.variants=(Array.isArray(t.variants)?t.variants:[]).concat(incoming);
   if(tagBox && tagBox.checked){ const set=new Set(t.tags||[]); for(const x of (s.tags||[])) set.add(x); t.tags=[...set]; }
@@ -593,11 +1014,228 @@ async function confirmMerge(){
   db.prompts=db.prompts.filter(x=>x.id!==s.id);
   delete shownVar[s.id];
   shownVar[t.id]=nt;            // show the first prompt that just arrived
+  if(trayId===s.id){ trayId=t.id; trayQueue=[]; }  // the pinned card was folded into another: follow it, drop the queue
   mergeState=null;
   const ok=await saveDB();
   closeModal(); render();
   if(ok) toast(ns>1 ? `Added as variants ${nt+1}–${nt+ns}` : `Added as variant ${nt+1}`);
 }
+
+/* ---- merge tray (v6.2) ----
+   The Library sorts by last change, so a card that has just taken a variant jumps
+   to the top while the next duplicate is still far below. "Collect into this card"
+   (the tray button on a thumbnail) pins that card into the sticky Library header;
+   any card dropped on the tray goes through the same confirm as a card-on-card
+   drop. Which card is pinned is session-only: never in the vault or settings. The
+   tray also stays put while searching, so you can search for the cards to fold in.
+   v6.4: the tray is a QUEUE. A drop (or Ctrl+click on a card) only queues the card,
+   with no dialog and no write; queued cards stay in the grid, marked. "Add N cards"
+   opens one confirm for the whole batch and saves once. The queue is session-only
+   too, holds card ids in the order queued, and is cleared when the pinned card
+   changes, on Done, and on lock. Ids that no longer exist are pruned on read. */
+let trayId=null;
+let trayQueue=[];
+function queueLive(){
+  if(!db || !trayId){ trayQueue=[]; return []; }
+  const out=[];
+  trayQueue=trayQueue.filter(id=>{ const c=id!==trayId && db.prompts.find(x=>x.id===id); if(c) out.push(c); return !!c; });
+  return out;
+}
+function queuedPrompts(){ return queueLive().reduce((a,q)=>a+vCount(q),0); }
+function canQueue(id){
+  const t=trayCard(); if(!t || !id || id===t.id || trayQueue.includes(id)) return false;
+  const s=db.prompts.find(x=>x.id===id); if(!s) return false;
+  return vCount(t)+queuedPrompts()+vCount(s)<=MAX_VARIANTS;
+}
+function setQueue(ids){
+  const touched=new Set(trayQueue.concat(ids));
+  trayQueue=ids.slice();
+  touched.forEach(refreshCard);
+  refreshTray();
+}
+function toggleQueue(id){
+  if(!trayCard()) return;
+  if(id===trayId) return toast('That is the pinned card');
+  if(trayQueue.includes(id)) return setQueue(trayQueue.filter(x=>x!==id));
+  if(!canQueue(id)) return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts`);
+  setQueue(trayQueue.concat(id));
+}
+// Ctrl+click (Cmd+click on a Mac) a card to queue or unqueue it. Capture phase, so
+// it wins over the card's own click targets (the image's zoom, Copy, Edit).
+// Form fields keep their normal behaviour. Without a pinned card it does nothing.
+document.addEventListener('click', e=>{
+  if(!(e.ctrlKey||e.metaKey) || !trayId || busyCount || view!=='library') return;
+  const card=e.target && e.target.closest ? e.target.closest('#rollups .pcard') : null;
+  if(!card || e.target.closest('select,input,textarea')) return;
+  e.preventDefault(); e.stopPropagation();
+  toggleQueue(card.id.slice(5));
+}, true);
+const TRAY_ICON=`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M6.5 5h11L20 13v6H4v-6z"/></svg>`;
+function trayCard(){
+  const p=(trayId && db) ? db.prompts.find(x=>x.id===trayId) : null;
+  if(!p) trayId=null;         // deleted, imported over or locked: the tray closes itself
+  return p;
+}
+function trayHTML(){
+  const p=trayCard(); if(!p) return '';
+  const q=queueLive(), qp=q.reduce((a,c)=>a+vCount(c),0);
+  const n=vCount(p), free=MAX_VARIANTS-n-qp, im=imageFor(p);
+  const strip=Array.from({length:n},(_,j)=>{ const vi=imageFor(vAt(p,j));
+    return vi ? `<img src="${vi.data}" alt="" title="${j+1} · ${esc(variantName(p,j))}">` : `<div class="mf-empty" title="${j+1} · ${esc(variantName(p,j))}"></div>`; }).join('')
+    + (q.length ? '<span class="mt-sep" aria-hidden="true"></span>' + q.map(c=>{ const ci=imageFor(c), k=vCount(c);
+      return `<span class="mt-q" title="Queued: ${esc(cardSnippet(c))}${k>1?` (${k} prompts)`:''}">${ci?`<img src="${ci.data}" alt="">`:'<div class="mf-empty"></div>'}${k>1?`<b>${k}</b>`:''}<button onclick="toggleQueue('${c.id}')" aria-label="Remove from the queue" title="Remove from the queue">✕</button></span>`; }).join('') : '');
+  const countTxt = !q.length ? `${n} of ${MAX_VARIANTS} prompts${free?` · room for ${free} more`:' · full'}`
+    : free<0 ? `<span style="color:var(--loss)">${n} + ${qp} queued is over ${MAX_VARIANTS} — remove a card from the queue</span>`
+    : `${n} + ${qp} queued of ${MAX_VARIANTS}${free?` · room for ${free} more`:' · full'}`;
+  return `<div class="mtray" id="mtray" ondragenter="onTrayDragOver(event)" ondragover="onTrayDragOver(event)" ondragleave="onTrayDragLeave(event)" ondrop="onTrayDrop(event)">
+    ${im?`<img class="mt-img" src="${im.data}" alt="">`:`<div class="mt-img mf-empty"></div>`}
+    <div class="mt-info"><div class="rowlabel">Collecting into</div>
+      <div class="mt-snip">${esc(cardSnippet(p))||'<span style="color:var(--faint)">(no prompt text)</span>'}</div>
+      <div class="mt-n" id="mtcount">${countTxt}</div></div>
+    <div class="mt-strip">${strip}</div>
+    <div class="mt-drop"><span class="idle">${free>0?'Drag or Ctrl+click cards to queue them':'This card is full'}</span><span class="ok">Drop to queue</span><span class="full">No room — ${MAX_VARIANTS} prompts max</span></div>
+    ${q.length?`<button class="btn sm brass" id="mt_add" onclick="openBulkMergeModal()" ${free<0?'disabled':''}>Add ${q.length} card${q.length===1?'':'s'}</button>`:''}
+    <button class="btn sm ghost" onclick="closeTray()" title="${q.length?'Unpin this card and clear the queue':'Unpin this card'}">Done</button>
+  </div>`;
+}
+function refreshTray(){ const el=$('#mergetray'); if(el) el.innerHTML=trayHTML(); }
+function toggleTray(id){
+  const prev=trayId, oldQ=trayQueue;
+  trayId=(trayId===id) ? null : id;
+  trayQueue=[];                // a queue belongs to one pinned card
+  oldQ.forEach(refreshCard);
+  refreshTray();
+  if(prev) refreshCard(prev);
+  if(trayId && trayId!==prev) refreshCard(trayId);
+  if(trayId) toast('Pinned — drag cards onto the tray, or Ctrl+click them, to queue them');
+}
+function closeTray(){ const prev=trayId, oldQ=trayQueue; trayId=null; trayQueue=[]; oldQ.forEach(refreshCard); refreshTray(); if(prev) refreshCard(prev); }
+function onTrayDragOver(e){
+  if(!dragCardId || !trayId || dragCardId===trayId || trayQueue.includes(dragCardId)) return;
+  e.stopPropagation();
+  const el=$('#mtray'), fits=canQueue(dragCardId);
+  if(fits){ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){} }
+  else { try{ e.dataTransfer.dropEffect='none'; }catch(_){} }
+  if(el && !el.classList.contains(fits?'drop-ok':'drop-full')){ clearDropMarks(); el.classList.add(fits?'drop-ok':'drop-full'); }
+}
+function onTrayDragLeave(e){
+  const el=$('#mtray'); if(!el) return;
+  if(e.relatedTarget && el.contains(e.relatedTarget)) return;
+  const r=el.getBoundingClientRect(), x=e.clientX, y=e.clientY;
+  if(x>r.left && x<r.right && y>r.top && y<r.bottom) return;
+  el.classList.remove('drop-ok','drop-full');
+}
+function onTrayDrop(e){
+  e.preventDefault(); e.stopPropagation();
+  const src=dragCardId;
+  onCardDragEnd();
+  if(canQueue(src)) setQueue(trayQueue.concat(src));   // v6.4: queue only, no write
+}
+// ---- bulk add (v6.4): one confirm, one save for everything queued ----
+let bulkState=null;
+function openBulkMergeModal(){
+  const t=trayCard(), srcs=queueLive(); if(!t || !srcs.length) return;
+  const nt=vCount(t), total=srcs.reduce((a,c)=>a+vCount(c),0);
+  if(nt+total>MAX_VARIANTS) return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts. Remove a card from the queue.`);
+  const thumb=im=>im ? `<img src="${im.data}" alt="">` : `<div class="mf-empty"></div>`;
+  const plan=[]; let k=0, rows='';
+  srcs.forEach((c,ci)=>{ for(let j=0;j<vCount(c);j++){ const v=vAt(c,j);
+    plan.push([c.id, j, k]);
+    rows+=`<div class="mergerow${ci>0&&j===0?' cardstart':''}">${thumb(imageFor(v))}<b>Variant ${nt+k+1}</b><input id="mb_name_${k}" placeholder="Name (optional)" onkeydown="if(event.key==='Enter')confirmBulkMerge()" value="${esc(v.label||'')}" aria-label="Name for variant ${nt+k+1} (optional)" title="${esc(cardSnippet(v))}"></div>`;
+    k++; } });
+  bulkState={tgtId:t.id, plan};
+  const newTags=[...new Set(srcs.flatMap(c=>c.tags||[]))].filter(x=>!(t.tags||[]).includes(x));
+  const catName=id=>id ? ((db.libCategories.find(c=>c.id===id)||{}).name||'Uncategorized') : 'Uncategorized';
+  const moving=srcs.filter(c=>(c.categoryId||null)!==(t.categoryId||null)).length;
+  const notes=[];
+  if(moving) notes.push(`${moving===srcs.length&&moving>1?'All of these cards are':moving===1?(srcs.length===1?'This card is':'1 of these cards is'):`${moving} of these cards are`} in another category; ${moving===1?'its prompts move':'their prompts move'} to ${esc(catName(t.categoryId))}.`);
+  if(srcs.some(c=>c.nsfw) && !t.nsfw) notes.push('The card becomes Protected, because at least one prompt you are moving is.');
+  const nc=srcs.length;
+  $('#modalRoot').innerHTML=`
+  <div class="scrim" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:min(560px,96vw)">
+      <div class="mh"><h3>Add ${nc} card${nc===1?'':'s'} to the pinned card?</h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
+      <div class="mergeflow">${thumb(imageFor(t))}<div class="mf-txt">${esc(cardSnippet(t))}</div></div>
+      <div class="sub" style="margin:6px 0 2px">${nc===1?'This card':`These ${nc} cards`} (${total} prompt${total===1?'':'s'}) will be added to the pinned card as ${total>1?`variants ${nt+1}–${nt+total}`:`variant ${nt+1}`}, in the order you queued them, and ${nc===1?'its card':'their cards'} will be removed from the Library. Text, image, seed, size and notes all go with them.</div>
+      <label class="fld">Variant names <span style="color:var(--faint);font-weight:500">(optional)</span></label>
+      <div class="mergerows">${rows}</div>
+      ${newTags.length?`<div class="checkline"><input id="mb_tags" type="checkbox" checked><label for="mb_tags" style="margin:0;font-size:13px">Also add their tags to the card: ${newTags.map(x=>`<span class="tag">${esc(x)}</span>`).join(' ')}</label></div>`:''}
+      ${notes.length?`<div class="mergenote">${notes.join('<br>')}</div>`:''}
+      <div class="foot">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" id="mb_ok" onclick="confirmBulkMerge()">Add ${nc} card${nc===1?'':'s'}</button>
+      </div>
+    </div>
+  </div>`;
+  const f=$('#mb_name_0'); if(f){ f.focus(); f.select(); }
+}
+async function confirmBulkMerge(){
+  const st=bulkState; if(!st) return;
+  const t=db.prompts.find(x=>x.id===st.tgtId);
+  if(!t){ bulkState=null; closeModal(); return; }
+  const now=new Date().toISOString();
+  // read the names first; skip any card that has gone since the dialog opened
+  const srcIds=[...new Set(st.plan.map(r=>r[0]))].filter(id=>db.prompts.some(x=>x.id===id));
+  const srcs=srcIds.map(id=>db.prompts.find(x=>x.id===id));
+  const nt=vCount(t), total=srcs.reduce((a,c)=>a+vCount(c),0);
+  if(!srcs.length){ bulkState=null; closeModal(); return; }
+  if(nt+total>MAX_VARIANTS){ bulkState=null; closeModal(); return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts`); }
+  const tagBox=$('#mb_tags'), addTags=!!(tagBox && tagBox.checked);
+  const incoming=[];
+  for(const c of srcs) for(let j=0;j<vCount(c);j++){
+    const r=st.plan.find(x=>x[0]===c.id && x[1]===j), el=r ? document.getElementById('mb_name_'+r[2]) : null;
+    incoming.push(incomingVariant(c, j, el ? el.value : null, now));
+  }
+  t.variants=(Array.isArray(t.variants)?t.variants:[]).concat(incoming);
+  if(addTags){ const set=new Set(t.tags||[]); for(const c of srcs) for(const x of (c.tags||[])) set.add(x); t.tags=[...set]; }
+  if(srcs.some(c=>c.nsfw)) t.nsfw=true;
+  t.updatedAt=now;
+  db.prompts=db.prompts.filter(x=>!srcIds.includes(x.id));
+  srcIds.forEach(id=>{ delete shownVar[id]; });
+  shownVar[t.id]=nt;
+  trayQueue=[]; bulkState=null;
+  const ok=await saveDB();
+  closeModal(); render();
+  if(ok) toast(`Added ${srcs.length} card${srcs.length===1?'':'s'} as ${total>1?`variants ${nt+1}–${nt+total}`:`variant ${nt+1}`}`);
+}
+
+/* ---- scroll while dragging (v6.2) ----
+   On Windows the mouse wheel does nothing during a native drag, and the browser
+   only auto-scrolls within a few pixels of the window edge. So while a card or a
+   category is being dragged, holding it in a band at the top (just below the
+   sticky Library header, or over the header itself) or at the bottom of the window
+   scrolls the page, faster the deeper into the band. The tray is exempt so it
+   can be dropped on. Driven by dragover (which keeps firing while the pointer
+   rests) and stopped on drag end, on drop, or when dragover stops arriving. */
+const AS_BAND=90, AS_MAX=28, AS_STALE_MS=500;   // band depth px, max px per frame, give-up time
+let asX=0, asY=null, asLast=0, asRAF=0;
+function autoScrollSpeed(y, top, bottom){
+  if(y < top+AS_BAND){ const d=Math.min(1,(top+AS_BAND-y)/AS_BAND); return -Math.max(1,Math.round(AS_MAX*d*d)); }
+  if(y > bottom-AS_BAND){ const d=Math.min(1,(y-(bottom-AS_BAND))/AS_BAND); return Math.max(1,Math.round(AS_MAX*d*d)); }
+  return 0;
+}
+function autoScrollSpeedAt(x, y){
+  const tray=$('#mtray');
+  if(tray){ const r=tray.getBoundingClientRect(); if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return 0; }
+  let top=0;
+  const h=view==='library' ? document.querySelector('.libheader') : null;
+  if(h && getComputedStyle(h).position==='sticky') top=Math.max(0, h.getBoundingClientRect().bottom);
+  return autoScrollSpeed(y, top, window.innerHeight);
+}
+function onDocDragOver(e){
+  if(!dragCardId && !dragCatId) return;
+  asX=e.clientX; asY=e.clientY; asLast=Date.now();
+  if(!asRAF) asRAF=requestAnimationFrame(autoScrollTick);
+}
+function autoScrollTick(){
+  asRAF=0;
+  if((!dragCardId && !dragCatId) || asY==null || Date.now()-asLast>AS_STALE_MS){ asY=null; return; }
+  const v=autoScrollSpeedAt(asX, asY);
+  if(v) window.scrollBy(0, v);
+  asRAF=requestAnimationFrame(autoScrollTick);
+}
+function stopAutoScroll(){ asY=null; if(asRAF){ try{ cancelAnimationFrame(asRAF); }catch(_){} asRAF=0; } }
+document.addEventListener('dragover', onDocDragOver, true);   // capture: card handlers stop propagation
 
 
 /* ============================ navigation ============================ */
@@ -618,7 +1256,7 @@ function render(){
   const root = document.getElementById('gateRoot');
   if(locked){
     root.hidden=false;
-    root.innerHTML = gateHTML(vaultExists ? 'unlock' : 'create', '');
+    root.innerHTML = gateHTML(gateMode || (vaultExists ? 'unlock' : vaultKnown ? 'missing' : 'create'), '');
     const gp=document.getElementById('gatePath'); if(gp) gp.textContent=vaultPath;
     const f=document.getElementById('gatePin'); if(f) f.focus();
     return;
@@ -627,7 +1265,7 @@ function render(){
   renderNav();
   $('#main').classList.toggle('narrow', view!=='library');
   $('#main').innerHTML = view==='library' ? viewLibrary() : viewData();
-  if(view==='data'){ refreshStoredNow(); refreshCardPreview(); }   // async: vault figures come from Python
+  if(view==='data'){ refreshStoredNow(); refreshCardPreview(); refreshVaultsCard(); }   // async: vault figures come from Python
 }
 function renderNav(){
   $('#nav').innerHTML=NAV.map(([id,label,d])=>`<button class="${id===view?'on':''}" onclick="go('${id}')">${icon(d)}<span>${label}</span></button>`).join('');
@@ -637,6 +1275,8 @@ function renderNav(){
 function renderLockbox(){
   const el=$('#lockbox'); if(!el) return;
   el.innerHTML=`<div class="lockbox"><div class="st">🔓 Vault open</div>
+    <div class="vname" title="${esc(vaultPath)}">${esc(vaultName||'vault')}</div>
+    <button onclick="openSwitchModal()">Switch vault…</button>
     <button onclick="lockNow()">Lock now</button></div>`;
 }
 
@@ -694,7 +1334,7 @@ function onRollupDragStart(e, catId){
 function onRollupDragEnd(){
   document.querySelectorAll('.rollup.dragging').forEach(el=>el.classList.remove('dragging'));
   document.querySelectorAll('.rollup.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  dragCatId=null;
+  dragCatId=null; stopAutoScroll();
 }
 function onRollupDrop(e, targetCatId){
   e.preventDefault();
@@ -856,7 +1496,7 @@ function updateWHRatio(){
   const el=$('#wh_ratio'); if(!el) return;
   const w=parseInt($('#f_width').value,10), h=parseInt($('#f_height').value,10);
   const r=aspectRatioLabel(w,h);
-  el.textContent=r ? `Ratio: ${r}` : '';
+  el.textContent=r||''; el.hidden=!r;
 }
 function cardHTML(p){
   const n=vCount(p), multi=n>1, i=shownIdx(p), v=vAt(p,i);
@@ -870,8 +1510,9 @@ function cardHTML(p){
   const comments=(v.comments||'').trim();
   const seed=(v.seed||'').trim();
   const ratio=aspectRatioLabel(v.width, v.height);
-  return `<div class="pcard${multi?' multi':''}" id="card-${p.id}" ondragenter="onCardDragOver(event,'${p.id}')" ondragover="onCardDragOver(event,'${p.id}')" ondragleave="onCardDragLeave(event,'${p.id}')" ondrop="onCardDrop(event,'${p.id}')">
-    <div class="tw">${img}${nav}<span class="vgrip" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragend="onCardDragEnd()" title="Drag onto another card to add it there as a variant" aria-label="Drag to another card">${GRIP_ICON}</span></div>
+  const pinned=trayId===p.id, qpos=trayId ? trayQueue.indexOf(p.id)+1 : 0;
+  return `<div class="pcard${multi?' multi':''}${pinned?' tray-on':''}${qpos?' queued':''}" id="card-${p.id}" ondragenter="onCardDragOver(event,'${p.id}')" ondragover="onCardDragOver(event,'${p.id}')" ondragleave="onCardDragLeave(event,'${p.id}')" ondrop="onCardDrop(event,'${p.id}')">
+    <div class="tw">${img}${nav}<span class="vgrip" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragend="onCardDragEnd()" title="Drag onto another card to add it there as a variant" aria-label="Drag to another card">${GRIP_ICON}</span>${qpos?`<span class="qbadge">Queued · ${qpos}</span>`:''}<button class="vpin${pinned?' on':''}" onclick="toggleTray('${p.id}')" title="${pinned?'Unpin from the merge tray':'Collect into this card: pin it to the top of the Library, then drag other cards onto it'}" aria-label="${pinned?'Unpin from the merge tray':'Collect into this card'}" aria-pressed="${pinned}">${TRAY_ICON}</button></div>
     <div class="body">
       ${multi?`<div class="vlabel"><b>V${i+1} of ${n}${v.label?' · '+esc(v.label):''}</b>${i===0?'<span class="vprim">Primary</span>':''}</div>`:''}
       ${p.nsfw?'<span class="pill nsfw">Protected</span>':''}
@@ -882,11 +1523,11 @@ function cardHTML(p){
       <div class="tagrow">${tagChips}</div>
     </div>
     <div class="foot">
-      <div style="display:flex;gap:6px;align-items:center">
+      <div class="fl">
         <button class="btn sm brass" onclick="copyPrompt('${p.id}',${i})" title="${multi?`Copy variant ${i+1}'s positive prompt`:'Copy the positive prompt'}">Copy</button>
         ${cardCategorySelectHTML(p)}
       </div>
-      <div style="display:flex;gap:6px">
+      <div class="fr">
         <button class="btn sm ghost" onclick="openPromptModal('${p.id}',${i})">Edit</button>
         <button class="iconbtn" title="${multi?'Delete card':'Delete'}" aria-label="${multi?'Delete card':'Delete'}" onclick="deletePromptConfirm('${p.id}')">✕</button>
       </div>
@@ -922,6 +1563,7 @@ function viewLibrary(){
     </div>
     <div class="rowlabel" style="margin-top:10px">Filter by tag</div>
     <div class="chiprow" id="chiprow">${chipsHTML()}</div>
+    <div id="mergetray">${trayHTML()}</div>
   </div>
   <div id="rollups">${rollupsHTML()}</div>`;
 }
@@ -931,6 +1573,7 @@ function refreshLibrary(){
   const cc=$('#catchips'); if(cc) cc.innerHTML=libCategoryChipsHTML();
   const r=$('#rollups'); if(r) r.innerHTML=rollupsHTML();
   const lc=$('#libcount'); if(lc) lc.textContent=libCountText();
+  refreshTray();
 }
 function setSearch(v){ state.search=v; refreshLibrary(); }
 function toggleImageCards(){
@@ -1059,6 +1702,7 @@ function storedNowHTML(stats){
     <div>Vault file</div><div class="num">${stats?fmtBytes(stats.bytes)+' encrypted on disk':'…'}</div>
     <div>Last written</div><div class="num">${stats&&stats.mtime?esc(stats.mtime):'…'}</div>
     <div>In memory</div><div class="num">${fmtBytes(inMem)} decrypted</div>
+    <div>Vault</div><div class="num">${esc(vaultName||'…')}</div>
     <div>Vault path</div><div class="num" style="word-break:break-all">${esc(vaultPath||'…')}</div>
     <div>Previous copies</div><div class="num">${g.length?g.map(x=>'.'+x.n+' '+fmtBytes(x.bytes)+' ('+esc(x.mtime)+')').join('<br>'):'none yet'}</div>
     <div>Key derivation</div><div class="num">PBKDF2-SHA256 · ${stats?stats.iterations:'…'} iterations · AES-256-GCM</div>
@@ -1108,6 +1752,18 @@ function viewData(){
   </div>
 
   <div class="card" style="margin-top:16px">
+    <div class="cardhead"><h3>Vaults</h3><span class="hint">each has its own passphrase · the list is kept in settings, not in any vault</span></div>
+    <div class="pad"><div id="vaultsCard">${vaultsCardHTML()}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn" onclick="openSwitchModal()">Switch vault…</button>
+        <button class="btn" onclick="openSwitchModal('new')">＋ Create a new vault…</button>
+        <button class="btn ghost" onclick="addVaultFromData()">Add a vault file…</button>
+      </div>
+      <div class="sub" style="margin:10px 0 0">Remove from list only forgets a vault here; the file and its .1/.2/.3 copies stay on disk. To copy cards from another vault, use Import backup › Merge and choose its .vault file.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
     <div class="cardhead"><h3>File locations</h3><span class="hint">remembered between sessions</span></div>
     <div class="pad">
       <div class="sub" style="margin:0 0 10px">A default folder is used without asking. With none set, the folder you last used is offered instead.</div>
@@ -1119,7 +1775,6 @@ function viewData(){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="btn" onclick="revealVault()">Open vault folder</button>
-        <button class="btn ghost" onclick="chooseVaultPath()">Change vault file…</button>
       </div>
     </div>
   </div>
@@ -1144,7 +1799,26 @@ function viewData(){
 }
 
 /* ============================ lightbox ============================ */
-function closeModal(){ $('#modalRoot').innerHTML=''; }
+function closeModal(){ $('#modalRoot').innerHTML=''; closeImageViewer(); }
+/* Image viewer (v6.6): the editor's thumbnail opens the image full size, sized
+   like the lightbox, with nothing but a close button. It draws into its own root
+   ABOVE the editor, so the editor (and anything typed but not saved) stays
+   exactly as it was underneath. It shows the image as it is in the editor right
+   now, including one just picked and not yet saved. Esc, ✕ or a click outside
+   closes it, and Esc closes only the viewer, not the editor. */
+function openImageViewer(){
+  const im=curDraft() && curDraft().image; if(!im || !im.data) return;
+  $('#viewerRoot').innerHTML=`<div class="scrim imgviewer" onclick="if(event.target===this)closeImageViewer()">
+    <div class="modal" id="ivModal" style="width:${lightboxWidthCSS(im.w, im.h)};position:relative">
+      <button class="iconbtn vclose" onclick="closeImageViewer()" aria-label="Close" title="Close (Esc)">✕</button>
+      <img src="${im.data}" alt="" onload="if(!(${+im.w||0}&&${+im.h||0})){const m=document.getElementById('ivModal'); if(m) m.style.width=lightboxWidthCSS(this.naturalWidth,this.naturalHeight);}" style="display:block;width:100%;max-height:${LB_IMG_VH}vh;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);margin-top:26px">
+    </div></div>`;
+}
+function closeImageViewer(){ const r=document.getElementById('viewerRoot'); if(r) r.innerHTML=''; }
+function imageViewerOpen(){ return !!document.querySelector('#viewerRoot .imgviewer'); }
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && imageViewerOpen()){ e.preventDefault(); e.stopPropagation(); closeImageViewer(); }
+}, true);
 /* The card thumbnail is cropped to a fixed aspect ratio; this shows the whole
    stored image (uncropped, up to its saved resolution).
    v6.0: the lightbox walks IMAGES, not cards. `items` is every imaged variant of
@@ -1310,14 +1984,28 @@ function captureModal(){
 }
 function renderImgPreview(){
   const im=curDraft() && curDraft().image;
-  if(!im) return '<div class="sub" style="margin-top:6px">No image attached.</div>';
-  return `<img class="imgprev" src="${im.data}"><div style="margin-top:6px;display:flex;align-items:center;gap:10px"><button type="button" class="btn sm ghost" onclick="removeModalImage()">Remove image</button>${im.w&&im.h?`<span class="sub" style="margin:0">Image ratio ${imageRatioTag(im)}</span>`:''}</div>`;
+  if(!im) return `<div class="imgempty"><span>No image attached</span><button type="button" class="btn sm" onclick="pickModalImage()">Choose image…</button></div>`;
+  return `<img class="imgprev" src="${im.data}" style="cursor:zoom-in" title="Click to view full size" onclick="openImageViewer()" alt="Reference image"><div class="edimgbar"><button type="button" class="btn sm" onclick="pickModalImage()">Replace…</button><button type="button" class="btn sm ghost" onclick="removeModalImage()">Remove</button>${im.w&&im.h?`<span class="sub">Image ratio ${imageRatioTag(im)}</span>`:''}</div>`;
 }
 function onModalImagePicked(input){
   const f=input.files[0]; if(!f) return;
   resizeImageFile(f, img=>{ captureModal(); curDraft().image=img; renderPromptModal(); });
 }
 function removeModalImage(){ captureModal(); curDraft().image=null; renderPromptModal(); }
+function pickModalImage(){ const f=$('#f_img'); if(f){ f.value=''; f.click(); } }
+/* v6.8: prompt boxes grow with their text instead of scrolling inside a fixed box.
+   CSS sets each one's minimum; the maximum is a share of the window, past which
+   the box scrolls as before, so one huge prompt can't push everything else away. */
+const GROW_MAX={f_prompt:.6, f_negprompt:.3, f_comments:.3};
+function autoGrow(el){
+  if(!el) return;
+  el.style.height='auto';
+  const sh=el.scrollHeight; if(!sh) { el.style.height=''; return; }   // not laid out (hidden / no layout engine)
+  const h=sh+(el.offsetHeight-el.clientHeight), max=Math.round((GROW_MAX[el.id]||.5)*window.innerHeight);
+  el.style.height=Math.min(h,max)+'px';
+  el.style.overflowY=h>max?'auto':'hidden';
+}
+function autoGrowAll(){ for(const id of Object.keys(GROW_MAX)) autoGrow(document.getElementById(id)); }
 /* Protected is a display flag — the vault itself is encrypted. Card-level. */
 function onModalNsfwToggle(cb){ modalState.shared.nsfw=cb.checked; }
 function openPromptModal(id=null, startIdx=0, opts={}){
@@ -1347,20 +2035,23 @@ function variantTabsHTML(){
   }).join('');
   const full=n>=MAX_VARIANTS;
   return `<div class="vtabsrow"><div class="vtabs" role="tablist" aria-label="Variants">${tabs}</div>
+    <span class="vcount" title="A card holds up to ${MAX_VARIANTS} related prompts">${n} of ${MAX_VARIANTS}</span>
     <button type="button" class="btn sm" onclick="variantAction('new')" ${full?'disabled':''} title="${full?`A card holds up to ${MAX_VARIANTS} prompts`:'Add a blank variant to this card'}">${full?`${MAX_VARIANTS} / ${MAX_VARIANTS}`:'+ New variant'}</button></div>`;
 }
 function renderPromptModal(){
   const {id, vars, idx, shared, msg}=modalState;
   const d=vars[idx], n=vars.length, full=n>=MAX_VARIANTS;
-  const prevScroll=(document.querySelector('#modalRoot .scrim')||{}).scrollTop||0;
+  const prevScroll=(document.querySelector('#modalRoot .edbody')||{}).scrollTop||0;
   const wr=aspectRatioLabel(parseInt(d.width,10),parseInt(d.height,10));
   const act=(a,label,dis,extra='')=>`<button type="button" class="btn sm" onclick="variantAction('${a}')" ${dis?'disabled':''} ${extra}>${label}</button>`;
   $('#modalRoot').innerHTML=`
   <div class="scrim" onclick="if(event.target===this)closeModal()">
     <div class="modal wide card">
+     <div class="edhead">
       <div class="mh"><h3>${id?(n>1?'Edit card':'Edit prompt'):'Add prompt'}</h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
-      <div class="sub" style="margin:0 0 4px">${n>1?`${n} variants in this card · up to ${MAX_VARIANTS}. The primary shows first on the card.`:`Add variants to keep related prompts on one card · up to ${MAX_VARIANTS}.`}</div>
       ${variantTabsHTML()}
+     </div>
+     <div class="edbody">
       <div class="vpanel">
         <div class="vactions">
           <span class="rowlabel">Variant ${idx+1} of ${n}${idx===0?' · primary':''}</span>
@@ -1372,36 +2063,47 @@ function renderPromptModal(){
           ${act('delete','Delete variant',n<=1,'style="color:var(--loss);border-color:var(--loss-soft)"')}
         </div>
         ${msg?`<div class="vmsg">${esc(msg)}</div>`:''}
-        <label class="fld" for="f_vlabel">Variant name (optional)</label>
-        <input id="f_vlabel" placeholder="e.g. Night, Low angle, Teal" value="${esc(d.label)}">
-        <div class="fldrow"><label class="fld" for="f_prompt">Positive prompt</label><button type="button" class="btn sm" onclick="copyModalPrompt()" title="Copy the positive prompt as currently typed">Copy</button></div>
-        <textarea id="f_prompt" rows="10" placeholder="e.g. A weathered lighthouse at dusk, cinematic lighting...">${esc(d.promptText)}</textarea>
-        <label class="fld" for="f_negprompt">Negative prompt (optional)</label>
-        <textarea id="f_negprompt" rows="2" placeholder="e.g. blurry, low quality, extra limbs...">${esc(d.negativePrompt)}</textarea>
-        <label class="fld" for="f_img">Reference image (optional)</label>
-        <input id="f_img" type="file" accept="image/*" onchange="onModalImagePicked(this)">
-        <div id="imgPreviewWrap">${renderImgPreview()}</div>
-        <label class="fld" for="f_seed">Seed (optional)</label>
-        <input id="f_seed" placeholder="e.g. 1847293650" inputmode="numeric" value="${esc(d.seed)}">
-        <label class="fld" for="f_width">Width &amp; height (optional)</label>
-        <div style="display:flex;gap:8px">
-          <input id="f_width" type="number" min="1" step="1" placeholder="Width, e.g. 1024" oninput="updateWHRatio()" value="${esc(d.width)}">
-          <input id="f_height" type="number" min="1" step="1" placeholder="Height, e.g. 1536" oninput="updateWHRatio()" value="${esc(d.height)}">
+        <div class="edgrid">
+          <div class="edcol">
+            <div class="edimg">
+              <label class="fld" for="f_img">Reference image (optional)</label>
+              <input id="f_img" type="file" accept="image/*" hidden onchange="onModalImagePicked(this)">
+              <div id="imgPreviewWrap">${renderImgPreview()}</div>
+            </div>
+            <div><label class="fld" for="f_seed">Seed (optional)</label>
+              <input id="f_seed" placeholder="e.g. 1847293650" inputmode="numeric" value="${esc(d.seed)}" style="font-family:var(--mono)"></div>
+            <div><label class="fld" for="f_width">Size (optional) <span id="wh_ratio" class="ratiotag" ${wr?'':'hidden'}>${wr||''}</span></label>
+              <div class="whrow">
+                <input id="f_width" type="number" min="1" step="1" placeholder="Width" aria-label="Width" oninput="updateWHRatio()" value="${esc(d.width)}">
+                <span>×</span>
+                <input id="f_height" type="number" min="1" step="1" placeholder="Height" aria-label="Height" oninput="updateWHRatio()" value="${esc(d.height)}">
+              </div></div>
+            <div><label class="fld" for="f_comments">Notes${n>1?' for this variant':' / comments'}</label>
+              <textarea id="f_comments" class="grow" rows="3" placeholder="Any notes about this prompt..." oninput="autoGrow(this)">${esc(d.comments)}</textarea></div>
+          </div>
+          <div class="edcol">
+            <div><label class="fld" for="f_vlabel">Variant name (optional)</label>
+              <input id="f_vlabel" placeholder="e.g. Night, Low angle, Teal" value="${esc(d.label)}"></div>
+            <div><div class="fldrow"><label class="fld" for="f_prompt">Positive prompt</label><button type="button" class="btn sm" onclick="copyModalPrompt()" title="Copy the positive prompt as currently typed">Copy</button></div>
+              <textarea id="f_prompt" class="grow" rows="8" placeholder="e.g. A weathered lighthouse at dusk, cinematic lighting..." oninput="autoGrow(this)">${esc(d.promptText)}</textarea></div>
+            <div><label class="fld" for="f_negprompt">Negative prompt (optional)</label>
+              <textarea id="f_negprompt" class="grow" rows="2" placeholder="e.g. blurry, low quality, extra limbs..." oninput="autoGrow(this)">${esc(d.negativePrompt)}</textarea></div>
+          </div>
         </div>
-        <div id="wh_ratio" class="sub" style="margin-top:6px">${wr?'Ratio: '+wr:''}</div>
-        <label class="fld" for="f_comments">Notes${n>1?' for this variant':' / comments'}</label>
-        <textarea id="f_comments" rows="3" placeholder="Any notes about this prompt...">${esc(d.comments)}</textarea>
       </div>
-      <div class="rowlabel" style="margin-top:18px">${n>1?`Shared by all ${n} variants`:'Card'}</div>
-      <label class="fld" for="f_category">Category (optional)</label>
-      <select id="f_category">
-        <option value="">— Uncategorized —</option>
-        ${db.libCategories.map(c=>`<option value="${esc(c.id)}" ${shared.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
-      </select>
-      <label class="fld" for="f_tags">Tags (comma separated)</label>
-      <input id="f_tags" placeholder="e.g. landscape, cinematic" list="tagsuggest" value="${esc(shared.tags)}">
-      <datalist id="tagsuggest">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
-      <div class="checkline"><input id="f_nsfw" type="checkbox" ${shared.nsfw?'checked':''} onchange="onModalNsfwToggle(this)"><label for="f_nsfw" style="margin:0;font-size:13px;color:var(--ink)">Mark as Protected</label></div>
+      <div class="rowlabel" style="margin-top:14px">${n>1?`Shared by all ${n} variants`:'Card'}</div>
+      <div class="edshared">
+        <div><label class="fld" for="f_category">Category (optional)</label>
+          <select id="f_category">
+            <option value="">— Uncategorized —</option>
+            ${db.libCategories.map(c=>`<option value="${esc(c.id)}" ${shared.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+          </select></div>
+        <div><label class="fld" for="f_tags">Tags (comma separated)</label>
+          <input id="f_tags" placeholder="e.g. landscape, cinematic" list="tagsuggest" value="${esc(shared.tags)}">
+          <datalist id="tagsuggest">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist></div>
+        <div class="checkline"><input id="f_nsfw" type="checkbox" ${shared.nsfw?'checked':''} onchange="onModalNsfwToggle(this)"><label for="f_nsfw" style="margin:0;font-size:13px;color:var(--ink)">Mark as Protected</label></div>
+      </div>
+     </div>
       <div class="foot">
         ${id?`<button class="btn danger" style="margin-right:auto" onclick="deletePromptConfirm('${id}')">${vCount(db.prompts.find(x=>x.id===id))>1?'Delete card':'Delete'}</button>`:''}
         <button class="btn ghost" onclick="closeModal()">Cancel</button>
@@ -1409,7 +2111,8 @@ function renderPromptModal(){
       </div>
     </div>
   </div>`;
-  const sc=document.querySelector('#modalRoot .scrim'); if(sc) sc.scrollTop=prevScroll;
+  autoGrowAll();
+  const sc=document.querySelector('#modalRoot .edbody'); if(sc) sc.scrollTop=prevScroll;
   const tab=document.querySelector('#modalRoot .vtab.on'); if(tab && tab.scrollIntoView) tab.scrollIntoView({block:'nearest', inline:'nearest'});
 }
 function switchVariant(j){
@@ -1519,36 +2222,63 @@ function copyPrompt(id, vi){
    The PIN is the vault key: nothing is readable until it is entered, and the
    app opens into this gate rather than into the Library. */
 function gateHTML(mode, msg){
-  const first = mode==='create';
+  const first = mode==='create', nv = mode==='newvault', missing = mode==='missing';
+  const title = nv ? 'Create a new vault' : first ? 'Create your vault' : missing ? 'Vault not found' : 'Unlock';
+  const hint = nv ? 'A separate encrypted file with its own passphrase. It starts empty.'
+    : first ? 'Choose a passphrase. It encrypts the whole vault file and is never stored anywhere — if you lose it, the vault cannot be recovered by anyone.'
+    : missing ? 'There is no file at this path. It may have been moved or renamed, or a network drive may be offline. Choose another vault, or try again.'
+    : 'Enter the passphrase for '+(vaultName?'<b>'+esc(vaultName)+'</b>':'this vault')+'.';
+  const pins = missing ? '' : `<input id="gatePin" type="password" placeholder="Passphrase" ${nv?'':'autofocus'}
+           onkeydown="if(event.key==='Enter')submitGate('${mode}')">
+    ${first||nv?`<input id="gatePin2" type="password" placeholder="Repeat passphrase"
+           onkeydown="if(event.key==='Enter')submitGate('${mode}')">`:''}`;
+  const btn = missing ? `<button class="btn brass" onclick="retryMissing()">Try again</button>`
+    : `<button class="btn brass" onclick="submitGate('${mode}')">${first||nv?'Create vault':'Unlock'}</button>`;
   return `<div class="gatewrap"><div class="gate">
     <div class="gatebrand">${SEAL_SVG}<div><b>Prompt Vault</b><small>A Smaller Hammer App</small></div></div>
-    <h2>${first?'Create your vault':'Unlock'}</h2>
-    <p class="gatehint">${first
-      ? 'Choose a passphrase. It encrypts the whole vault file and is never stored anywhere — if you lose it, the vault cannot be recovered by anyone.'
-      : 'Enter the passphrase for this vault.'}</p>
-    <input id="gatePin" type="password" placeholder="Passphrase" autofocus
-           onkeydown="if(event.key==='Enter')submitGate('${mode}')">
-    ${first?`<input id="gatePin2" type="password" placeholder="Repeat passphrase"
-           onkeydown="if(event.key==='Enter')submitGate('${mode}')">`:''}
+    <h2>${title}</h2>
+    <p class="gatehint">${hint}</p>
+    ${gatePickerHTML(mode)}
+    ${nv?newVaultHTML():''}
+    ${gateNote&&!nv?`<div class="gatenote" id="gateNote">${esc(gateNote)}</div>`:''}
+    ${pins}
     <div id="gateMsg" class="gatemsg">${msg?esc(msg):''}</div>
-    <button class="btn brass" onclick="submitGate('${mode}')">${first?'Create vault':'Unlock'}</button>
-    <div class="gatepath" id="gatePath"></div>
+    ${btn}
+    ${nv?'<button class="gateback" onclick="leaveNewVault()">← Back</button>':'<div class="gatepath" id="gatePath"></div>'}
   </div></div>`;
 }
 function gateMsg(t){ const e=$('#gateMsg'); if(e) e.textContent=t; }
 async function submitGate(mode){
   const pin=$('#gatePin').value;
+  if(mode==='newvault'){
+    captureNewVault();
+    const prob=vaultNameProblem(newVaultDraft.name);
+    if(prob) return gateMsg(prob);
+    if(pin.length<4) return gateMsg('Passphrase: at least 4 characters.');
+    if(pin!==$('#gatePin2').value) return gateMsg('The two entries do not match.');
+    const r=await call('create_vault', pin, newVaultDraft.name.trim(), newVaultDraft.folder);
+    if(!r.ok) return gateMsg(r.error||'Could not create the vault.');
+    gateMode=null; gateNote='';
+    db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library';
+    await refreshVaultStatus(); render();
+    toast('Vault '+vaultName+' created');
+    return;
+  }
   if(pin.length<4) return gateMsg('At least 4 characters.');
   if(mode==='create'){
     if(pin!==$('#gatePin2').value) return gateMsg('The two entries do not match.');
     const r=await call('create_vault', pin);
     if(!r.ok) return gateMsg(r.error||'Could not create the vault.');
-    db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library'; render(); return;
+    gateNote='';
+    db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library';
+    await refreshVaultStatus(); render(); return;
   }
   gateMsg('Deriving key…');
   const r=await call('unlock', pin);
   if(!r.ok) return gateMsg(r.error||'Could not unlock.');
-  db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library'; render();
+  gateNote='';
+  db=r.db; expandedCats=r.expanded||{}; sessionUnlocked=true; view='library';
+  await refreshVaultStatus(); render();
   if(r.upgraded) toast(`Vault re-encrypted — key derivation raised to ${r.upgraded.to.toLocaleString()} iterations`);
 }
 function openPinChangeModal(){
@@ -1581,25 +2311,53 @@ async function confirmPinChange(){
 /* ============================ data io ============================ */
 async function exportBackup(encrypted){
   const r=await call('export_backup', !!encrypted, JSON.stringify(db));
-  if(r.cancelled) return;
-  if(!r.ok){ setStorageAlert('Export failed — '+(r.error||'unknown error')); return; }
+  if(r.cancelled) return false;
+  if(!r.ok){ setStorageAlert('Export failed — '+(r.error||'unknown error')); return false; }
   toast('Backup written to '+r.path);
+  return true;
 }
 async function importBackup(){
   const pick=await call('pick_import');
   if(pick.cancelled) return;
   if(!pick.ok){ setStorageAlert('Import failed — '+(pick.error||'unknown error')); return; }
-  if(!confirm('Import replaces the whole library in this vault. Continue?')) return;
-  importState={path:pick.path, filePin:null, legacyPin:null};
-  runImport();
+  importState={path:pick.path, mode:'merge', filePin:null, legacyPin:null};
+  openImportModeModal();
 }
+/* v6.5: an import can MERGE (the default) or REPLACE. Replace is the pre-v6.5
+   behaviour: Python decrypts and saves the backup as the whole library. Merge
+   asks Python only to decrypt (read_backup writes nothing), then compares the
+   backup with the open library here, asks about every conflict, and saves the
+   result once through saveDB(), under this vault's passphrase. */
+function openImportModeModal(){
+  const st=importState; if(!st) return;
+  const name=String(st.path||'').split(/[\\/]/).pop();
+  const opt=(mode,title,text)=>`<label class="impmode${st.mode===mode?' on':''}"><input type="radio" name="impmode" value="${mode}" ${st.mode===mode?'checked':''} onchange="importState.mode='${mode}';openImportModeModal()"><span><b>${title}</b><small>${text}</small></span></label>`;
+  $('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)cancelImport()">
+    <div class="modal" style="width:min(520px,96vw)">
+      <div class="mh"><h3>Import backup</h3><button class="iconbtn" onclick="cancelImport()" aria-label="Close">✕</button></div>
+      <div class="sub" style="margin:0 0 12px;word-break:break-all"><span class="num">${esc(name)}</span></div>
+      ${opt('merge','Merge into this vault','Adds what is new. Asks you about every card that differs. Cards that only partly overlap are added separately and tagged <span class="tag">'+AUDIT_TAG+'</span>. You see a summary before anything is saved.')}
+      ${opt('replace','Replace the whole library','Everything in this vault is swapped for the backup. The previous library stays in the .1 copy beside the vault until three more saves.')}
+      <div class="foot">
+        <button class="btn ghost" onclick="cancelImport()">Cancel</button>
+        <button class="btn ${st.mode==='replace'?'danger':'brass'}" id="imp_go" onclick="startImport()">${st.mode==='replace'?'Replace library':'Continue'}</button>
+      </div>
+    </div></div>`;
+}
+function startImport(){ if(!importState) return; closeModal(); runImport(); }
 /* Import may need up to two different PINs — one for the backup file, one for
    protected prompts encrypted individually inside a browser-build backup.
    Python says which is missing; this just asks for whichever it names. */
 let importState=null;
 async function runImport(){
   const st=importState; if(!st) return;
-  const r=await call('import_backup', st.path, st.filePin, st.legacyPin);
+  const merge=st.mode==='merge';
+  const r=await call(merge ? 'read_backup' : 'import_backup', st.path, st.filePin, st.legacyPin);
+  if(r.ok && merge){
+    importState=null; closeModal();
+    openMergeImport(r.db, st.path, !!r.migrated);
+    return;
+  }
   if(r.ok){
     importState=null; closeModal();
     db=r.db; expandedCats=r.expanded||{}; setStorageAlert(null); render();
@@ -1643,6 +2401,193 @@ async function submitImportPin(which){
   $('#impMsg').textContent='Decrypting…';
   await runImport();
 }
+/* ---------- merge import (v6.5) ----------
+   FINGERPRINT. A prompt's fingerprint is its defining content: prompt text,
+   negative prompt, seed and generation size, with whitespace collapsed and
+   trimmed (case is kept). Name, notes, image, tags, category, Protected and
+   timestamps are DETAILS about a prompt and are compared separately, so editing
+   notes does not make a prompt "different". A card's fingerprint is the multiset
+   of its prompts' fingerprints. Computed on the fly from both libraries, never
+   stored, so nothing has to be kept in step on edit and browser-build backups
+   work too. (It is the canonical string itself, not a hash: it is only ever
+   compared in memory, so there is nothing a hash would add.)
+   CLASSES, per incoming card:
+     identical: a card here has the same fingerprint and the same details  -> skipped
+     changed:   same fingerprint, different details        -> ALWAYS ASK (mine / backup's)
+     overlap:   shares the card id or at least one prompt with a card here, but is not
+                the same card                               -> added as a SEPARATE card,
+                and it and the cards it overlaps get the AUDIT_TAG for manual attention
+     new:       nothing in common                          -> added
+   Categories are matched by name (case-insensitive); missing ones are created.
+   An incoming id already used here is replaced with a fresh one. */
+const AUDIT_TAG='audit-overlap';
+function fpNorm(x){ return String(x==null?'':x).replace(/\s+/g,' ').trim(); }
+function variantFP(v){ return JSON.stringify([fpNorm(v.promptText), fpNorm(v.negativePrompt), fpNorm(v.seed), v.width?String(v.width):'', v.height?String(v.height):'']); }
+function cardFPs(p){ return Array.from({length:vCount(p)},(_,i)=>variantFP(vAt(p,i))); }
+function sameMultiset(a,b){ if(a.length!==b.length) return false; const x=[...a].sort(), y=[...b].sort(); return x.every((k,i)=>k===y[i]); }
+function catNameIn(d,id){ return id ? (((d.libCategories||[]).find(c=>c.id===id)||{}).name||'') : ''; }
+// What differs between two cards with the same fingerprint (human-readable list).
+function cardDetailDiffs(cur, curDb, inc, incDb){
+  const out=[];
+  const tags=p=>[...new Set(p.tags||[])].filter(t=>t!==AUDIT_TAG).sort().join('\u0001');   // our own review tag is not a difference
+  if(tags(cur)!==tags(inc)) out.push('tags');
+  if(catNameIn(curDb,cur.categoryId).toLowerCase()!==catNameIn(incDb,inc.categoryId).toLowerCase()) out.push('category');
+  if(!!cur.nsfw!==!!inc.nsfw) out.push('Protected');
+  const cf=cardFPs(cur), inf=cardFPs(inc);
+  if(cf.join('\u0002')!==inf.join('\u0002')) out.push('variant order');
+  // pair variants by fingerprint, in order
+  const used=new Set(); let names=false, notes=false, imgs=false;
+  for(let i=0;i<inf.length;i++){
+    const j=cf.findIndex((k,jj)=>k===inf[i] && !used.has(jj)); if(j<0) continue; used.add(j);
+    const a=vAt(cur,j), b=vAt(inc,i);
+    if(fpNorm(a.label)!==fpNorm(b.label)) names=true;
+    if(String(a.comments||'').trim()!==String(b.comments||'').trim()) notes=true;
+    const ia=imageFor(a), ib=imageFor(b);
+    if((ia?ia.data:'')!==(ib?ib.data:'')) imgs=true;
+  }
+  if(names) out.push('names'); if(notes) out.push('notes'); if(imgs) out.push('images');
+  return out;
+}
+function planMerge(curDb, incDb){
+  const plan={added:[], identical:[], changed:[], overlaps:[], newCats:[]};
+  const byFP=new Map(), byId=new Map();
+  for(const p of curDb.prompts){ byId.set(p.id,p); for(const k of cardFPs(p)){ if(!byFP.has(k)) byFP.set(k,new Set()); byFP.get(k).add(p); } }
+  for(const inc of (incDb.prompts||[])){
+    if(!inc || typeof inc!=='object') continue;
+    const fps=cardFPs(inc), cands=new Set();
+    if(byId.has(inc.id)) cands.add(byId.get(inc.id));
+    for(const k of fps) for(const p of (byFP.get(k)||[])) cands.add(p);
+    if(!cands.size){ plan.added.push(inc); continue; }
+    const exact=[...cands].filter(p=>sameMultiset(cardFPs(p),fps));
+    const match=exact.find(p=>p.id===inc.id) || exact[0];
+    if(match){
+      const diffs=cardDetailDiffs(match, curDb, inc, incDb);
+      if(diffs.length) plan.changed.push({inc, cur:match, diffs, choice:null});
+      else plan.identical.push({inc, cur:match});
+      continue;
+    }
+    const shared=fps.filter(k=>[...cands].some(p=>cardFPs(p).includes(k)));
+    plan.overlaps.push({inc, curIds:[...cands].map(p=>p.id), shared:new Set(shared).size});
+  }
+  const have=new Set(curDb.libCategories.map(c=>c.name.trim().toLowerCase()));
+  for(const it of plan.added.concat(plan.overlaps.map(o=>o.inc), plan.changed.map(c=>c.inc))){
+    const n=catNameIn(incDb, it.categoryId).trim();
+    if(n && !have.has(n.toLowerCase())){ have.add(n.toLowerCase()); plan.newCats.push(n); }
+  }
+  // a changed card whose backup version is never chosen does not need its category
+  return plan;
+}
+// Applies a plan to db in memory. Returns counts. The caller saves.
+function applyMerge(plan, incDb){
+  const catFor=new Map();
+  const mapCat=incCatId=>{
+    const n=catNameIn(incDb, incCatId).trim(); if(!n) return null;
+    const key=n.toLowerCase();
+    if(catFor.has(key)) return catFor.get(key);
+    let c=db.libCategories.find(x=>x.name.trim().toLowerCase()===key);
+    if(!c){ c={id:uid(), name:n}; db.libCategories.push(c); }
+    catFor.set(key, c.id); return c.id;
+  };
+  const ids=new Set(db.prompts.map(p=>p.id));
+  const bring=(inc, extraTag)=>{
+    const c=JSON.parse(JSON.stringify(inc));
+    if(!c.id || ids.has(c.id)) c.id=uid();
+    ids.add(c.id);
+    c.categoryId=mapCat(inc.categoryId);
+    c.tags=Array.isArray(c.tags)?c.tags:[];
+    if(extraTag && !c.tags.includes(extraTag)) c.tags.push(extraTag);
+    delete c.enc;
+    return c;
+  };
+  let added=0, updated=0, overlaps=0;
+  for(const inc of plan.added){ db.prompts.push(bring(inc)); added++; }
+  for(const o of plan.overlaps){
+    db.prompts.push(bring(o.inc, AUDIT_TAG)); overlaps++;
+    for(const id of o.curIds){ const p=db.prompts.find(x=>x.id===id); if(p){ p.tags=Array.isArray(p.tags)?p.tags:[]; if(!p.tags.includes(AUDIT_TAG)) p.tags.push(AUDIT_TAG); } }
+  }
+  for(const ch of plan.changed){
+    if(ch.choice!=='theirs') continue;
+    const i=db.prompts.findIndex(x=>x.id===ch.cur.id); if(i<0) continue;
+    const c=JSON.parse(JSON.stringify(ch.inc));
+    c.id=ch.cur.id; c.categoryId=mapCat(ch.inc.categoryId); c.tags=Array.isArray(c.tags)?c.tags:[];
+    delete c.enc; delete shownVar[c.id];
+    db.prompts[i]=c; updated++;
+  }
+  return {added, updated, overlaps};
+}
+let mergeImport=null;
+function openMergeImport(incDb, path, migrated){
+  mergeImport={incDb, path, migrated, plan:planMerge(db, incDb)};
+  renderMergeImport();
+}
+function renderMergeImport(){
+  const m=mergeImport; if(!m) return;
+  const P=m.plan, name=String(m.path||'').split(/[\\/]/).pop();
+  const left=P.changed.filter(c=>!c.choice).length;
+  const thumb=p=>{ const im=imageFor(p); return im?`<img src="${im.data}" alt="">`:'<div class="mf-empty"></div>'; };
+  const when=t=>t ? esc(String(t).slice(0,10)) : 'unknown';
+  const stat=(n,label,cls)=>`<div class="mstat ${cls}"><b class="num">${n}</b><span>${label}</span></div>`;
+  const changedRows=P.changed.map((c,i)=>`<div class="mrow">
+      ${c.diffs.includes('images')?`<span class="mr-pair" title="Yours → backup's">${thumb(c.cur)}<span aria-hidden="true">→</span>${thumb(c.inc)}</span>`:thumb(c.cur)}<div class="mr-txt"><div class="mr-snip">${esc(cardSnippet(c.inc))||'(no prompt text)'}</div>
+        <div class="mr-sub">Differs in: ${esc(c.diffs.join(', '))} · yours edited ${when(c.cur.updatedAt)} · backup's ${when(c.inc.updatedAt)}</div></div>
+      <div class="seg" role="group" aria-label="Which version to keep">
+        <button class="${c.choice==='mine'?'on':''}" onclick="mergeImportChoose(${i},'mine')">Keep mine</button>
+        <button class="${c.choice==='theirs'?'on':''}" onclick="mergeImportChoose(${i},'theirs')">Use backup's</button></div>
+    </div>`).join('');
+  const overlapRows=P.overlaps.map(o=>`<div class="mrow">
+      ${thumb(o.inc)}<div class="mr-txt"><div class="mr-snip">${esc(cardSnippet(o.inc))||'(no prompt text)'}</div>
+        <div class="mr-sub">${o.shared?`Shares ${o.shared} of ${vCount(o.inc)} prompt${vCount(o.inc)===1?'':'s'}`:'Same card id, different prompts'} with ${o.curIds.length===1?'one of your cards':`${o.curIds.length} of your cards`}</div></div>
+    </div>`).join('');
+  const nothing=!P.added.length && !P.overlaps.length && !P.changed.length;
+  const sc=document.querySelector('#modalRoot .scrim'), top=sc?sc.scrollTop:0;
+  $('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)closeMergeImport()">
+    <div class="modal wide" style="width:min(720px,96vw)">
+      <div class="mh"><h3>Merge backup into this vault</h3><button class="iconbtn" onclick="closeMergeImport()" aria-label="Close">✕</button></div>
+      <div class="sub" style="margin:0 0 4px;word-break:break-all"><span class="num">${esc(name)}</span>${m.migrated?' · from the browser build':''}</div>
+      <div class="sub" style="margin:0 0 12px">Cards are matched by prompt content (prompt, negative prompt, seed, size) and by card id. Nothing is saved until you press Merge, and everything is saved under this vault's passphrase.</div>
+      <div class="mstats">
+        ${stat(P.added.length,'new — will be added','new')}
+        ${stat(P.identical.length,'already here — skipped','same')}
+        ${stat(P.changed.length,'changed — you choose','chg')}
+        ${stat(P.overlaps.length,'overlap — added separately','ovl')}
+      </div>
+      ${P.newCats.length?`<div class="sub" style="margin:10px 0 0">New categories: ${P.newCats.map(n=>`<span class="tag">${esc(n)}</span>`).join(' ')}</div>`:''}
+      ${P.changed.length?`<div class="msec"><div class="msec-h"><span class="rowlabel">Changed cards</span>
+          <span style="display:flex;gap:6px"><button class="btn sm" onclick="mergeImportChooseAll('mine')">Keep all mine</button><button class="btn sm" onclick="mergeImportChooseAll('theirs')">Use all backup's</button></span></div>
+          <div class="sub" style="margin:0 0 8px">Same prompts on both sides, but something about them differs. Choose which version to keep for each.</div>${changedRows}</div>`:''}
+      ${P.overlaps.length?`<div class="msec"><div class="msec-h"><span class="rowlabel">Overlapping cards</span></div>
+          <div class="sub" style="margin:0 0 8px">These share some prompts (or a card id) with cards you already have, but are not the same card. They are added as separate cards, and both they and the cards they overlap get the tag <span class="tag">${AUDIT_TAG}</span>. Filter by that tag to review them, then remove it.</div>${overlapRows}</div>`:''}
+      <div class="foot" style="align-items:center">
+        ${left?`<span class="sub" style="margin:0 auto 0 0;color:var(--warn)" id="mi_left">Choose for ${left} changed card${left===1?'':'s'}</span>`:''}
+        <button class="btn ghost" onclick="closeMergeImport()">${nothing?'Close':'Cancel'}</button>
+        <button class="btn brass" id="mi_ok" onclick="confirmMergeImport()" ${left||nothing?'disabled':''}>${nothing?'Nothing to merge':'Merge'}</button>
+      </div>
+    </div></div>`;
+  const sc2=document.querySelector('#modalRoot .scrim'); if(sc2) sc2.scrollTop=top;
+}
+function mergeImportChoose(i,c){ const m=mergeImport; if(!m||!m.plan.changed[i]) return; m.plan.changed[i].choice=c; renderMergeImport(); }
+function mergeImportChooseAll(c){ const m=mergeImport; if(!m) return; m.plan.changed.forEach(x=>x.choice=c); renderMergeImport(); }
+function closeMergeImport(){ mergeImport=null; closeModal(); }
+async function confirmMergeImport(){
+  const m=mergeImport; if(!m) return;
+  if(m.plan.changed.some(c=>!c.choice)) return renderMergeImport();
+  // the library may have changed under the dialog; re-plan and carry the choices over by card
+  const fresh=planMerge(db, m.incDb);
+  const pick=new Map(m.plan.changed.map(c=>[c.inc, c.choice]));
+  for(const c of fresh.changed) c.choice=pick.get(c.inc)||null;
+  if(fresh.changed.some(c=>!c.choice)){ m.plan=fresh; return renderMergeImport(); }
+  mergeImport=null;
+  const r=applyMerge(fresh, m.incDb);
+  const ok=await saveDB();
+  closeModal(); render();
+  if(ok){
+    const parts=[];
+    if(r.added) parts.push(`${r.added} added`);
+    if(r.updated) parts.push(`${r.updated} updated`);
+    if(r.overlaps) parts.push(`${r.overlaps} overlap${r.overlaps===1?'':'s'} tagged ${AUDIT_TAG}`);
+    toast('Merged — '+(parts.join(', ')||'no changes'));
+  }
+}
 async function resetAll(){
   if(!confirm('Erase all prompts and categories in this vault? This cannot be undone.')) return;
   if(!confirm('Really erase everything? The previous state remains in the rolling .1/.2/.3 files beside the vault.')) return;
@@ -1657,11 +2602,7 @@ async function chooseDefaultDir(kind){
   if(r.ok){ toast('Default set'); refreshStoredNow(); }
 }
 async function clearDefaultDir(kind){ await call('clear_default_dir', kind); refreshStoredNow(); }
-async function chooseVaultPath(){
-  const r=await call('choose_vault_path');
-  if(r.ok) alert('Vault path set to:\n'+r.path+'\n\nRestart Prompt Vault for this to take effect. The current vault file is not moved — copy it there yourself if that is what you intended.');
-}
-async function revealVault(){ await call('reveal_vault'); }
+async function revealVault(i){ const v=i==null?null:vaultList[i]; await call('reveal_vault', v?v.path:null); }
 
 /* ============================ right-click menu ============================
    Not by design: pywebview ties WebView2's built-in context menu to debug mode
@@ -1756,7 +2697,7 @@ async function boot(){
   await apiReady();
   const st=await call('status');
   if(!st.ok){ document.getElementById('main').innerHTML='<p class="hint" style="padding:30px">'+esc(st.error||'No desktop bridge.')+'</p>'; return; }
-  APP_VERSION=st.appVersion; APP_BUILD=st.appBuild; vaultPath=st.vaultPath; vaultExists=st.exists;
+  APP_VERSION=st.appVersion; APP_BUILD=st.appBuild; applyStatus(st);
   if(st.ui && typeof st.ui==='object') uiPrefs=Object.assign(uiPrefs, st.ui);
   applyCardWidth();
   if(st.lock && !st.lock.stale){

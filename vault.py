@@ -20,6 +20,7 @@ import base64
 import gzip
 import json
 import os
+import re
 import socket
 import tempfile
 import time
@@ -491,16 +492,58 @@ class Vault:
         }
 
 
+# --------------------------------------------------------------------------- vault names
+# A vault's name IS its file name (portraits -> portraits.vault), so a name must
+# be a valid, unsurprising file name on Windows, macOS and Linux alike. Kept to
+# a conservative set rather than "whatever the OS allows": letters, digits,
+# space, hyphen and underscore, starting with a letter or digit. That rules out
+# path separators, the characters Windows forbids (<>:"/\|?*), control
+# characters, and trailing dots or spaces (which Windows silently strips).
+VAULT_EXT = ".vault"
+VAULT_NAME_MAX = 60
+MAX_PATH_CHARS = 250       # under Windows' classic 260-character MAX_PATH, with room for .N/.lock
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]*$")
+# Windows device names: "CON.vault" opens the console device, not a file.
+RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL",
+                  *(f"COM{i}" for i in range(10)), *(f"LPT{i}" for i in range(10))}
+
+
+def vault_file_name(name: str) -> str:
+    """Validate a vault name and return its file name. Raises VaultError
+    with a message fit to show the user."""
+    n = (name or "").strip()
+    if not n:
+        raise VaultError("Give the vault a name.")
+    if len(n) > VAULT_NAME_MAX:
+        raise VaultError(f"Keep the name to {VAULT_NAME_MAX} characters or fewer.")
+    if not _NAME_RE.match(n):
+        raise VaultError("Use letters, digits, spaces, - and _ only, starting with a letter or digit.")
+    if "  " in n:
+        raise VaultError("Use single spaces between words.")
+    if n.upper() in RESERVED_NAMES:
+        raise VaultError(f"“{n}” is reserved by Windows. Choose another name.")
+    return n + VAULT_EXT
+
+
+def vault_name(path) -> str:
+    """The name shown for a vault: its file name without the extension."""
+    return Path(path).stem
+
+
 # --------------------------------------------------------------------------- settings
 DEFAULT_SETTINGS = {
-    "vault_path": "",          # blank = promptvault.vault beside the app
+    "vault_path": "",          # pre-v6.7 single vault; migrated into `vaults` at launch
+    "vaults": [],              # v6.7: [{path, opened, backup}] - paths and timestamps only
+    "last_vault": "",          # v6.7: the vault offered at launch
     "backup_dir": "",          # default target for exports; blank = ask each time
     "import_dir": "",          # default source for imports
     "last_backup_dir": "",     # remembered from the last export
     "last_import_dir": "",     # remembered from the last import
-    "expanded": {},            # libCategoryId|'__uncat__' -> bool. UI state, deliberately
-                               # NOT in the vault: see EMPTY_DB. Holds opaque ids only,
-                               # never category names or any prompt content.
+    "expanded": {},            # pre-v6.7 single-vault expand state; migrated at launch
+    "expanded_by_vault": {},   # v6.7: vault path -> {libCategoryId|'__uncat__': bool}.
+                               # UI state, deliberately NOT in the vault: see EMPTY_DB.
+                               # Opaque ids only, never category names or prompt content.
+                               # Per vault, because category ids repeat between vaults.
     "ui": {"imageCards": False, "cardWidth": 230},  # display prefs (v5.5+). UI state, not data.
     "window": {"width": 1280, "height": 860, "maximized": False},  # written on close (v5.8)
 }
@@ -511,7 +554,8 @@ class Settings:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self.data = dict(DEFAULT_SETTINGS)
+        # deep copy: the defaults hold lists and dicts that must never be shared
+        self.data = json.loads(json.dumps(DEFAULT_SETTINGS))
         self.load()
 
     def load(self) -> None:

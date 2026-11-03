@@ -43,7 +43,7 @@ exe = EXE(
     upx=False,
     console=False,          # no console window
     disable_windowed_traceback=False,
-    icon=None,              # drop an .ico beside this file and point here
+    icon='icon/promptvault.ico',   # also the window/taskbar icon: pywebview takes it from the exe
 )
 
 coll = COLLECT(

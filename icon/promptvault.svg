@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Prompt Vault Desktop icon - A Smaller Hammer App. Copyright (c) 2026 Smaller Hammer. MIT Licence.
+       Master artwork, used for 40 px and up. A padlock holding a command prompt. -->
+  <rect x="9.5" y="9.5" width="237" height="237" rx="51" fill="#16202B" stroke="#3A4A5C" stroke-width="3"/>
+  <g transform="translate(8,8) scale(1.5)">
+    <path d="M55 72 V55 a25 25 0 0 1 50 0 V72" fill="none" stroke="#C8943A" stroke-width="9" stroke-linecap="round"/>
+    <rect x="40" y="68" width="80" height="62" rx="10" fill="#C8943A"/>
+    <path d="M58 88 l12 11 l-12 11" fill="none" stroke="#16202B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="77" y1="112" x2="98" y2="112" stroke="#16202B" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>
