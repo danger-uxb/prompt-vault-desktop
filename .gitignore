@@ -1,0 +1,11 @@
+# your data — never commit it
+*.vault
+*.vault.[0-9]
+*.vault.lock
+promptvault-settings.json
+*.json.gz
+
+# build output
+build/
+dist/
+__pycache__/
