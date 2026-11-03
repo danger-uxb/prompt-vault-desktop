@@ -1,0 +1,3 @@
+# Windows batch files need CRLF line endings (goto labels can fail with LF)
+*.bat text eol=crlf
+*.docx binary
