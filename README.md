@@ -3,8 +3,10 @@
 A Windows desktop app for keeping the text prompts you write for image generators,
 together with the picture each one produced, in one encrypted file on your own PC.
 
-**v6.8 · build 2026-11-03** · A Smaller Hammer app. No account, no server, no internet
+**v7.1 · build 2026-11-08** · A Smaller Hammer app. No account, no server, no internet
 connection needed once it is built.
+
+![The Prompt Vault Library, with the cupajoelite example cards](docs/screenshots/library.png)
 
 ## Getting it running
 
@@ -35,25 +37,34 @@ the app straight from these files, with a separate test vault in this folder.
 
 ## Features
 
-- Prompts with a negative prompt, reference image, seed, size, tags and notes
+- Prompts with a negative prompt, reference image, seed, size, ratio, tags and notes
+- **Image import:** drop PNGs saved with the free
+  [Prompt Vault Card nodes for ComfyUI](https://github.com/danger-uxb/comfyui-prompt-vault-card)
+  onto the Library and each card fills itself in: prompt, negative, seed, size, ratio,
+  model, LoRAs, sampler settings, category, tags and credit
+- Generation settings and credit (prompt author, author URL, image source URL) kept with
+  every prompt, and searchable
 - Up to 10 variants per card: versions of one idea kept together, each with its own
   image, browsable on the card and in the image viewer
-- Drag one card onto another to combine them, or pin a card to the merge tray, queue
-  several cards onto it and add them all at once
-- A compact editor: picture, seed, size and notes beside the prompt, with prompt boxes
-  that grow as you type
-- Several vaults, each with its own passphrase; switch between them, with an encrypted
-  backup offered on the way out
+- Drag one card onto another to combine them, or pin a card and queue many into it at once
 - Categories, search across every variant, tag filters, adjustable card size
 - One-click copy of any prompt
-- Encrypted and plain backup export; import by merging (with a preview of what is new,
-  changed or overlapping) or by replacing; three automatic safety copies
+- Several vaults, each with its own passphrase
+- Encrypted and plain backups; import by merging or replacing; three automatic safety copies
+
+## Try it with the sample images
+
+The `samples` folder holds six PNGs saved with the Prompt Vault Card node. Unlock Prompt
+Vault, select all six in File Explorer and drag them onto the Library: the review window
+shows six new cards, ready to import, in a new **cupajoelite** category. The user guide's
+*Try it: the sample images* chapter walks through it.
+
+<img src="docs/screenshots/import-images.png" alt="The Import images window after dropping the six samples" width="560">
 
 ## Where your data lives
 
 Everything is in one file, `promptvault.vault`, next to `PromptVault.exe`. It is encrypted
-(AES-256-GCM) with your passphrase. Extra vaults you create go in a `vaults` folder beside
-it, each with its own passphrase. **The passphrase is never stored and cannot be
+(AES-256-GCM) with your passphrase. **The passphrase is never stored and cannot be
 recovered.** The whole program folder is portable: copy it to another PC or a USB stick
 and it runs there.
 
@@ -61,7 +72,7 @@ The vault is the only copy of your prompts until you export a backup. **Export a
 encrypted backup to a second drive regularly.**
 
 To upgrade, build the new version and copy its `PromptVault.exe` and `_internal` folder
-over the old ones. Your vaults and settings are not touched.
+over the old ones. Your vault and settings are not touched.
 
 ## Files
 
@@ -69,17 +80,27 @@ over the old ones. Your vaults and settings are not touched.
 |---|---|
 | `app.py`, `vault.py`, `ui\` | The application |
 | `requirements.txt` | The tools to install before building |
-| `build_exe.bat`, `promptvault.spec`, `icon\` | Build `dist\PromptVault\PromptVault.exe` |
+| `build_exe.bat`, `promptvault.spec` | Build `dist\PromptVault\PromptVault.exe` |
 | `run.bat` | Run from source without building |
-| `docs\` | The user guide |
+| `docs\` | The user guide, and the screenshots on this page |
+| `samples\` | Six example PNGs to try image import with |
 
-Tip of the day: To ensure no one ever steals your chocolate, store it in your stomach for safe keeping.
-Keep safe and its always that weird purple wire.. Chonky
-~~~
- (\(\
- (._.)
-c(___)
-~~~
+## Credits
+
+The example prompts in the user guide and the sample images are by
+**[cupajoelite](https://civitai.com/user/cupajoelite)**, used with their permission. The
+sample pictures were rendered from those prompts by Smaller Hammer; the originals are:
+
+| Sample | Original |
+|---|---|
+| `cupajoelite_1_cosmic_ape.png` | https://civitai.com/images/147214871 |
+| `cupajoelite_2_steampunk_garden.png` | https://civitai.com/images/148251721 |
+| `cupajoelite_3_witch.png` | https://civitai.com/images/147215030 |
+| `cupajoelite_4_drowned_king.png` | https://civitai.com/images/147190802 |
+| `cupajoelite_5_neon_catgirl.png` | https://civitai.com/images/146770843 |
+| `cupajoelite_6_day_of_the_dead.png` | https://civitai.com/images/147214831 |
+
+The prompts and images remain cupajoelite's; the MIT licence below covers the software only.
 
 ## Licence
 

@@ -432,6 +432,42 @@ textarea.grow{resize:none;overflow-y:hidden}
 .vactions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .vactions .rowlabel{margin-right:auto}
 .vmsg{margin-top:10px;font-size:12.5px;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:6px 10px}
+/* v7.0: recorded ratio, generation settings, image import */
+.whrow.ratio{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 74px}
+.whrow input.ratioin{font-family:var(--mono);text-align:center}
+.whrow input.need{border-color:var(--warn);background:var(--warn-soft)}
+.whhint{font-size:11.5px;color:var(--warn);margin-top:4px}
+/* v7.1: credit (author, author URL, image source URL) per variant */
+.credgrid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.1fr) minmax(0,1.1fr);gap:10px}
+.credgrid .fldrow{display:flex;align-items:center;gap:6px}
+.credgrid .fldrow .btn{margin-left:auto;padding:1px 8px}
+.pcredit{font-size:12px;color:var(--muted);margin-top:4px}
+.pcredit b{color:var(--ink-2);font-weight:600}
+@media (max-width:900px){.credgrid{grid-template-columns:1fr}}
+.pvask{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pvask .pvbtns{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.edmeta{margin-top:14px;border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;background:var(--surface-2)}
+.edmeta .fldrow{display:flex;gap:8px;align-items:center}
+.metagrid{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:3px 12px;margin-top:6px;font-size:12.5px}
+.metagrid .mk{color:var(--muted)}
+.metagrid .mv{font-family:var(--mono);font-size:12px;word-break:break-word;white-space:pre-wrap}
+.drophint{position:fixed;inset:14px;z-index:45;border:3px dashed var(--brass);border-radius:14px;background:rgba(168,119,44,.08);
+  display:flex;align-items:center;justify-content:center;pointer-events:none}
+.drophint[hidden]{display:none}
+.drophint span{background:var(--surface);border:1px solid var(--brass);color:var(--ink);font-weight:600;padding:10px 18px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.importmodal{width:min(900px,96vw)}
+.irows{display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto;padding-right:4px}
+.irow{display:grid;grid-template-columns:72px minmax(0,1fr) 230px;gap:12px;align-items:start;border:1px solid var(--line-2);border-radius:8px;padding:8px;background:var(--surface)}
+.irow.bad{border-color:var(--loss);background:var(--loss-soft)}
+.irow img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line-2)}
+.irow select{width:100%}
+.irname{font-weight:600;font-size:12.5px}
+.irprompt{font-size:12.5px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:2px 0}
+.irwhere{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.ircat{font-size:12px;color:var(--brass);font-weight:600}
+.irnote{font-size:12px;color:var(--muted);margin-top:3px}
+.irnote.bad{color:var(--loss)}
+.btn.dim{opacity:.55}
 .btn:disabled,.btn:disabled:hover{color:var(--faint);cursor:default;background:var(--surface);border-color:var(--line)}
 
 /* ---- responsive: rail -> horizontal top bar (same markup, CSS transform only) ---- */
@@ -466,13 +502,14 @@ textarea.grow{resize:none;overflow-y:hidden}
 <div id="savealert" class="savealert" hidden></div>
 <div id="busy" class="busy" hidden role="status" aria-live="polite"><div class="busypill"><span class="spin" aria-hidden="true"></span><span id="busyText">Working…</span></div></div>
 <div id="toast" class="toast"></div>
+<div id="dropHint" class="drophint" hidden><span>Drop images to import them as cards</span></div>
 <div id="modalRoot"></div>
 <div id="viewerRoot"></div>
 <div id="ctxRoot"></div>
 
 <script>
 /* ============================ constants ============================ */
-let APP_VERSION='6.8', APP_BUILD='2026-11-03';   // authoritative values come from Python
+let APP_VERSION='7.1', APP_BUILD='2026-11-08';   // authoritative values come from Python
 let vaultPath='';      // reported by Python at boot
 let vaultExists=false;
 /* v6.7 alternate vaults: one open at a time. Python keeps the list (paths and
@@ -837,11 +874,11 @@ async function addVaultFromData(){
 // long edge capped at MAX_IMG_DIM, re-encoded as JPEG at IMG_QUALITY, aspect ratio
 // preserved. A reference copy of what the prompt produced, not an archival original.
 // Images already stored at an older cap are left alone — re-upload to re-encode.
-function resizeImageFile(file, cb){
+function resizeImageFile(file, cb, fail){
   busyStart('Processing image…');
   let done=false; const finish=()=>{ if(!done){ done=true; busyEnd(); } };
   const reader=new FileReader();
-  reader.onerror=()=>{ finish(); toast('Could not read that image'); };
+  reader.onerror=()=>{ finish(); toast('Could not read that image'); if(fail) fail(); };
   reader.onload=()=>{
     const img=new Image();
     img.onload=()=>{
@@ -853,7 +890,7 @@ function resizeImageFile(file, cb){
       canvas.getContext('2d').drawImage(img,0,0,w,h);
       try{ cb({data:canvas.toDataURL('image/jpeg', IMG_QUALITY), w, h}); } finally { finish(); }
     };
-    img.onerror=()=>{ finish(); toast('Could not read that image'); };
+    img.onerror=()=>{ finish(); toast('Could not read that image'); if(fail) fail(); };
     img.src=reader.result;
   };
   reader.readAsDataURL(file);
@@ -866,6 +903,436 @@ function resizeImageFile(file, cb){
    dodge a 5MB localStorage cap that does not exist on a real filesystem.
    Kept as a function so every render path still has one accessor. */
 function imageFor(p){ return (p && p.image && p.image.data) ? p.image : null; }
+
+/* ======================= recorded ratio + settings (v7.0) =======================
+   Two per-variant fields, both omitted when empty (same rule as `label`):
+     ratio: "9:16"   the ratio as recorded or typed. Never calculated into it.
+     meta:  {model, clip[], vae, loras[{name, model, clip}], sampler, scheduler,
+             steps, cfg, denoise, extra[{node, name, value}], source{app, created}}
+   v7.1 adds three more, same rule: author, authorUrl, sourceUrl (the credit).
+   URLs are stored as text and copied, never opened: the app opens no connections.
+   Shown ratio = the recorded one, else an exact ratio only when it is a standard
+   one (both terms <= 21: 1024x1536 -> 2:3), else nothing — 1088x1920 is not
+   shown as 17:30. The editor asks for it when it can't be worked out. */
+const RATIO_MAX_TERM=21;
+function standardRatio(w,h){
+  w=parseInt(w,10); h=parseInt(h,10);
+  if(!(w>0) || !(h>0)) return '';
+  const g=gcd(w,h)||1, a=w/g, b=h/g;
+  return (a<=RATIO_MAX_TERM && b<=RATIO_MAX_TERM) ? `${a}:${b}` : '';
+}
+function cleanRatio(r){
+  const m=String(r==null?'':r).match(/^\s*(\d{1,3})\s*[:x×\/]\s*(\d{1,3})\s*$/i);
+  return (m && +m[1]>0 && +m[2]>0) ? `${+m[1]}:${+m[2]}` : '';
+}
+function shownRatio(v){ return (v && cleanRatio(v.ratio)) || standardRatio(v && v.width, v && v.height); }
+function metaLines(m){
+  if(!m || typeof m!=='object') return [];
+  const out=[], num=x=>x===undefined||x===null||x==='' ? null : String(x);
+  if(m.model) out.push(['Model', m.model]);
+  if(Array.isArray(m.clip) && m.clip.length) out.push(['CLIP', m.clip.join(', ')]);
+  if(m.vae) out.push(['VAE', m.vae]);
+  (Array.isArray(m.loras)?m.loras:[]).forEach((l,i)=>out.push([i?'':'LoRAs', `${l.name}${num(l.model)!==null?' · '+num(l.model):''}${num(l.clip)!==null?' / '+num(l.clip):''}`]));
+  const samp=[m.sampler, m.scheduler].filter(Boolean).join(' · ');
+  if(samp) out.push(['Sampler', samp]);
+  const nums=[['steps',m.steps],['cfg',m.cfg],['denoise',m.denoise]].filter(x=>num(x[1])!==null).map(x=>`${x[0]} ${x[1]}`).join(' · ');
+  if(nums) out.push([samp?'':'Sampler', nums]);
+  for(const e of (Array.isArray(m.extra)?m.extra:[])) out.push([e.node ? `${e.node} › ${e.name}` : e.name, String(e.value)]);
+  return out;
+}
+function metaText(m){ return metaLines(m).map(([k,v])=>(k?k+': ':'  ')+v).join('\n'); }
+function metaCount(m){ return metaLines(m).length; }
+
+/* ---- reading the image's Prompt Vault data ----
+   The ComfyUI node "Prompt Vault Card" writes a PNG text chunk named
+   `promptvault`. It must be read from the original file: resizeImageFile
+   re-encodes through a canvas, which drops all metadata. Everything in it is
+   untrusted input, so it is reduced to known fields, types and lengths. */
+const PV_CHUNK='promptvault';
+function readFileBuffer(file){
+  return new Promise(res=>{
+    try{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>res(null); r.readAsArrayBuffer(file); }
+    catch(_){ res(null); }
+  });
+}
+async function inflateBytes(bytes){
+  const ds=new DecompressionStream('deflate');
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function pngTextChunks(buf){
+  const b=new Uint8Array(buf), out={};
+  const sig=[137,80,78,71,13,10,26,10];
+  if(b.length<8 || !sig.every((v,i)=>b[i]===v)) return null;
+  const dv=new DataView(buf), latin1=new TextDecoder('latin1'), utf8=new TextDecoder('utf-8');
+  let p=8;
+  while(p+8<=b.length){
+    const len=dv.getUint32(p), type=String.fromCharCode(b[p+4],b[p+5],b[p+6],b[p+7]);
+    if(p+12+len>b.length) break;
+    const data=b.subarray(p+8,p+8+len);
+    try{
+      if(type==='tEXt'){ const z=data.indexOf(0); out[latin1.decode(data.subarray(0,z))]=latin1.decode(data.subarray(z+1)); }
+      else if(type==='iTXt'){
+        const z=data.indexOf(0), key=latin1.decode(data.subarray(0,z)), comp=data[z+1]===1;
+        let q=data.indexOf(0,z+3)+1; q=data.indexOf(0,q)+1;
+        let body=data.subarray(q); if(comp) body=await inflateBytes(body);
+        out[key]=utf8.decode(body);
+      } else if(type==='zTXt'){ const z=data.indexOf(0); out[latin1.decode(data.subarray(0,z))]=latin1.decode(await inflateBytes(data.subarray(z+2))); }
+      else if(type==='IEND') break;
+    }catch(_){ /* skip a damaged chunk */ }
+    p+=12+len;
+  }
+  return out;
+}
+const pvStr=(x,max)=>(typeof x==='string' || (typeof x==='number' && isFinite(x))) ? String(x).slice(0,max) : '';
+const pvNum=x=>(typeof x==='number' && isFinite(x)) ? x : (typeof x==='string' && x.trim()!=='' && isFinite(+x)) ? +x : undefined;
+const pvInt=x=>{ const n=parseInt(x,10); return (n>0 && n<100000) ? n : ''; };
+function cleanMeta(m, source){
+  if(!m || typeof m!=='object' || Array.isArray(m)) return null;
+  const o={};
+  for(const k of ['model','vae','sampler','scheduler']){ const s=pvStr(m[k],200).trim(); if(s) o[k]=s; }
+  if(Array.isArray(m.clip)){ const c=m.clip.map(x=>pvStr(x,200).trim()).filter(Boolean).slice(0,4); if(c.length) o.clip=c; }
+  if(Array.isArray(m.loras)){
+    const l=m.loras.filter(x=>x && typeof x==='object').slice(0,40).map(x=>{
+      const r={name:pvStr(x.name,200).trim()}, a=pvNum(x.model), c=pvNum(x.clip);
+      if(a!==undefined) r.model=a; if(c!==undefined) r.clip=c; return r; }).filter(x=>x.name);
+    if(l.length) o.loras=l;
+  }
+  for(const k of ['steps','cfg','denoise']){ const n=pvNum(m[k]); if(n!==undefined) o[k]=n; }
+  if(Array.isArray(m.extra)){
+    const e=m.extra.filter(x=>x && typeof x==='object').slice(0,100)
+      .map(x=>({node:pvStr(x.node,120).trim(), name:pvStr(x.name,120).trim(), value:pvStr(x.value,4000)})).filter(x=>x.name);
+    if(e.length) o.extra=e;
+  }
+  if(!Object.keys(o).length) return null;
+  if(source && typeof source==='object'){
+    const s={}, app=pvStr(source.app,40).trim(), created=pvStr(source.created,40).trim();
+    if(app) s.app=app; if(created) s.created=created;
+    if(Object.keys(s).length) o.source=s;
+  }
+  return o;
+}
+function pvClean(raw){
+  if(!raw || typeof raw!=='object' || raw.pv!==1 || !raw.card || typeof raw.card!=='object') return null;
+  const c=raw.card;
+  const draft={ label:pvStr(c.label,120).trim(), promptText:pvStr(c.promptText,50000).trim(),
+    negativePrompt:pvStr(c.negativePrompt,20000).trim(), seed:pvStr(c.seed,40).trim(),
+    width:pvInt(c.width), height:pvInt(c.height), ratio:cleanRatio(c.ratio),
+    comments:pvStr(c.comments,10000).trim(), meta:cleanMeta(raw.meta, raw.source),
+    author:pvStr(c.author,120).trim(), authorUrl:pvStr(c.authorUrl,500).trim(), sourceUrl:pvStr(c.sourceUrl,500).trim() };
+  const tags=Array.isArray(c.tags) ? c.tags.map(t=>pvStr(t,60).trim()).filter(Boolean) : [];
+  const seen=new Set(), uniq=tags.filter(t=>{ const k=t.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,50);
+  return { draft, shared:{ category:pvStr(c.category,120).trim(), tags:uniq, nsfw:c.nsfw===true } };
+}
+async function readPvFromFile(file){
+  try{
+    if(!/png$/i.test(file.type||'') && !/\.png$/i.test(file.name||'')) return null;
+    const buf=await readFileBuffer(file); if(!buf) return null;
+    const t=await pngTextChunks(buf);
+    if(!t || !t[PV_CHUNK]) return null;
+    return pvClean(JSON.parse(t[PV_CHUNK]));
+  }catch(_){ return null; }
+}
+function resizeImageAsync(file){ return new Promise(res=>resizeImageFile(file, img=>res(img), ()=>res(null))); }
+async function readImageImport(file){
+  const [img, pv]=await Promise.all([resizeImageAsync(file), readPvFromFile(file)]);
+  return {name:file.name||'image', img, pv};
+}
+const isFileDrag=e=>{ try{ return !!e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files'); }catch(_){ return false; } };
+const imageFiles=list=>[...(list||[])].filter(f=>/^image\//i.test(f.type||'') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name||''));
+function catIdByName(name){
+  const k=String(name||'').trim().toLowerCase(); if(!k) return '';
+  const c=db.libCategories.find(x=>x.name.trim().toLowerCase()===k);
+  return c ? c.id : '';
+}
+// Category ids held in a dialog may be 'new:<name>' until the save creates them.
+function resolveCatId(v){
+  v=v||'';
+  if(!v.startsWith('new:')) return v||null;
+  const name=v.slice(4).trim(), have=catIdByName(name);
+  if(have) return have;
+  const c={id:uid(), name}; db.libCategories.push(c); return c.id;
+}
+const splitTags=s=>String(s||'').split(',').map(t=>t.trim()).filter(Boolean);
+function addTagsTo(list, more){
+  const out=list.slice(), have=new Set(out.map(t=>t.toLowerCase()));
+  for(const t of more||[]) if(!have.has(t.toLowerCase())){ have.add(t.toLowerCase()); out.push(t); }
+  return out;
+}
+// Drop empty optional fields so a card without them keeps the v6 shape.
+function stripEmpty(o){
+  for(const k of ['label','author','authorUrl','sourceUrl']) if(!o[k]) delete o[k];
+  if(!o.ratio) delete o.ratio;
+  if(!o.meta) delete o.meta;
+  return o;
+}
+
+/* ---- route A: the card editor ----
+   Picking (or dropping) an image that carries Prompt Vault data fills the
+   variant's empty fields at once. If it would change something already
+   typed, the editor asks first: fill empty fields only, use the image's
+   values, or keep mine. Nothing is written until Save. */
+const PV_FIELDS=['promptText','negativePrompt','seed','width','height','ratio','label','comments','author','authorUrl','sourceUrl'];
+const PV_FIELD_NAMES={promptText:'prompt', negativePrompt:'negative', seed:'seed', width:'width', height:'height', ratio:'ratio', label:'name', comments:'notes', author:'author', authorUrl:'author URL', sourceUrl:'source URL', meta:'settings'};
+function pvConflicts(d, pv){
+  const out=PV_FIELDS.filter(k=>{ const a=String(d[k]==null?'':d[k]).trim(), b=String(pv.draft[k]==null?'':pv.draft[k]).trim(); return a && b && a!==b; });
+  if(d.meta && pv.draft.meta && JSON.stringify(d.meta)!==JSON.stringify(pv.draft.meta)) out.push('meta');
+  return out;
+}
+function pvFillDraft(d, pv, mode){
+  for(const k of PV_FIELDS){
+    const v=pv.draft[k]; if(v===''||v==null) continue;
+    if(mode==='all' || !String(d[k]==null?'':d[k]).trim()) d[k]=v;
+  }
+  if(pv.draft.meta && (mode==='all' || !d.meta)) d.meta=pv.draft.meta;
+}
+function pvFillShared(pv){
+  const sh=modalState.shared, s=pv.shared;
+  if(s.category && !sh.categoryId) sh.categoryId=catIdByName(s.category) || 'new:'+s.category;
+  if(s.tags.length) sh.tags=addTagsTo(splitTags(sh.tags), s.tags).join(', ');
+  if(s.nsfw) sh.nsfw=true;
+}
+async function onModalImagePicked(input){
+  const f=input.files && input.files[0]; if(!f) return;
+  await modalTakeImage(f);
+}
+async function modalTakeImage(f){
+  const {img, pv}=await readImageImport(f);
+  if(!img || !modalState) return;
+  captureModal();
+  const d=curDraft(); d.image=img;
+  modalState.pvPending=null;
+  if(pv){
+    const conf=pvConflicts(d, pv);
+    if(!conf.length){ pvFillDraft(d, pv, 'empty'); pvFillShared(pv); modalState.msg="Filled in from the image's Prompt Vault data."; }
+    else { modalState.pvPending={pv, idx:modalState.idx, conf}; modalState.msg=''; }
+  }
+  renderPromptModal();
+}
+function pvPendingHTML(){
+  const pp=modalState.pvPending; if(!pp || pp.idx!==modalState.idx) return '';
+  const what=pp.conf.map(k=>PV_FIELD_NAMES[k]||k).join(', ');
+  return `<div class="vmsg pvask"><span>This image carries Prompt Vault data that differs from what's here (${esc(what)}).</span>
+    <span class="pvbtns"><button type="button" class="btn sm" onclick="pvResolve('empty')">Fill empty fields only</button>
+    <button type="button" class="btn sm brass" onclick="pvResolve('all')">Use the image's values</button>
+    <button type="button" class="btn sm ghost" onclick="pvResolve('none')">Keep mine</button></span></div>`;
+}
+function pvResolve(mode){
+  const pp=modalState && modalState.pvPending; if(!pp) return;
+  captureModal();
+  const d=modalState.vars[pp.idx];
+  if(mode!=='none'){ pvFillDraft(d, pp.pv, mode); pvFillShared(pp.pv); }
+  modalState.pvPending=null;
+  modalState.msg=mode==='all' ? "Filled in with the image's values." : mode==='empty' ? 'Filled in the empty fields from the image.' : 'Kept your values; only the image was replaced.';
+  renderPromptModal();
+}
+function copyField(id, msg){ const e=document.getElementById(id), t=e ? e.value.trim() : ''; if(!t) return toast('Nothing to copy'); copyText(t, msg); }
+function removeModalMeta(){ captureModal(); curDraft().meta=null; modalState.msg='Generation settings removed. Nothing is written until you save.'; renderPromptModal(); }
+function copyModalMeta(){ const d=curDraft(); if(d && d.meta) copyText(metaText(d.meta), 'Settings copied'); }
+function editorMetaHTML(d){
+  if(!d.meta) return '';
+  const src=d.meta.source||{}, dt=src.created ? new Date(src.created) : null, p2=n=>String(n).padStart(2,'0');
+  const when=!dt ? '' : isNaN(dt) ? String(src.created).slice(0,10) : `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())}`;   // local date
+  const rows=metaLines(d.meta).map(([k,v])=>`<span class="mk">${esc(k)}</span><span class="mv">${esc(v)}</span>`).join('');
+  return `<div class="edmeta">
+    <div class="fldrow"><span class="rowlabel">Generation settings</span>${src.app||when?`<span class="sub">from ${esc(src.app||'image')}${when?' · '+esc(when):''}</span>`:''}
+      <span style="margin-left:auto;display:flex;gap:6px"><button type="button" class="btn sm" onclick="copyModalMeta()">Copy</button><button type="button" class="btn sm ghost" onclick="removeModalMeta()">Remove</button></span></div>
+    <div class="metagrid">${rows}</div></div>`;
+}
+function updateWHRatio(){
+  const el=$('#wh_ratio'); if(!el) return;
+  const w=$('#f_width').value, h=$('#f_height').value, rf=$('#f_ratio'), typed=rf ? cleanRatio(rf.value) : '';
+  const std=standardRatio(w,h), r=typed||std;
+  el.textContent=r||''; el.hidden=!r;
+  if(rf) rf.placeholder=std||'e.g. 16:9';
+  const need=!!(parseInt(w,10)>0 && parseInt(h,10)>0 && !r && !(rf && rf.value.trim()));
+  const hint=$('#wh_hint'); if(hint) hint.hidden=!need;
+  if(rf) rf.classList.toggle('need', need);
+}
+
+/* ---- routes B and C: dropping images on the Library or on a card ----
+   Every drop opens one review: a row per image with what it will become (a new
+   card, a variant of a card, or skipped). Import is one saveDB(). */
+let importReview=null;
+function onDocFileDragOver(e){
+  if(!isFileDrag(e)) return;
+  e.preventDefault();   // never let WebView2 navigate to a dropped file
+  const lib=db && view==='library' && !$('#modalRoot').innerHTML;
+  const ed=!!document.querySelector('#modalRoot .modal.card');
+  try{ e.dataTransfer.dropEffect=(lib||ed)?'copy':'none'; }catch(_){}
+  if(lib) showDropHint();
+}
+function onDocFileDrop(e){
+  if(!isFileDrag(e)) return;
+  e.preventDefault(); hideDropHint();
+  const files=imageFiles(e.dataTransfer.files); if(!files.length) return;
+  if(document.querySelector('#modalRoot .modal.card')){ modalTakeImage(files[0]); return; }
+  if(db && view==='library' && !$('#modalRoot').innerHTML) openImportReview(files, null);
+}
+let dropHintT=0;
+function showDropHint(){ const h=$('#dropHint'); if(h) h.hidden=false; clearTimeout(dropHintT); dropHintT=setTimeout(hideDropHint, 250); }
+function hideDropHint(){ const h=$('#dropHint'); if(h) h.hidden=true; clearTimeout(dropHintT); }
+document.addEventListener('dragover', onDocFileDragOver);
+document.addEventListener('drop', onDocFileDrop);
+function cardRoom(id){ const p=db.prompts.find(x=>x.id===id); return p ? MAX_VARIANTS-vCount(p) : 0; }
+function onCardFileDragOver(e, id){
+  e.stopPropagation(); e.preventDefault();
+  const el=document.getElementById('card-'+id), fits=cardRoom(id)>0;
+  try{ e.dataTransfer.dropEffect=fits?'copy':'none'; }catch(_){}
+  if(el && !el.classList.contains(fits?'drop-ok':'drop-full')){ clearDropMarks(); el.classList.add(fits?'drop-ok':'drop-full'); }
+  hideDropHint();
+}
+function onCardFileDrop(e, id){
+  e.preventDefault(); e.stopPropagation(); clearDropMarks(); hideDropHint();
+  const files=imageFiles(e.dataTransfer.files); if(!files.length) return;
+  if(cardRoom(id)<=0) return toast(`No room — a card holds up to ${MAX_VARIANTS} prompts`);
+  openImportReview(files, id);
+}
+const promptKey=d=>JSON.stringify([fpNorm(d.promptText), fpNorm(d.negativePrompt)]);
+async function openImportReview(files, targetId){
+  const rows=[];
+  for(const f of files){ rows.push(await readImageImport(f)); }
+  const live=rows.filter(r=>r.img);
+  if(!live.length) return toast('Could not read those images');
+  const byFP=new Map(), byPrompt=new Map();
+  for(const p of db.prompts) for(let i=0;i<vCount(p);i++){
+    const v=vAt(p,i), fp=variantFP(v), pk=promptKey(v);
+    if(!byFP.has(fp)) byFP.set(fp, p.id);
+    if(!byPrompt.has(pk)) byPrompt.set(pk, p.id);
+  }
+  const seenFP=new Map(), seenPK=new Map();
+  live.forEach((r,i)=>{
+    r.opts=[]; r.note='';
+    if(!r.pv || !r.pv.draft.promptText){
+      r.action='skip';
+      r.note=r.pv ? 'Its Prompt Vault data has no prompt text.' : 'No Prompt Vault data. Add it from a card editor (Replace…) instead.';
+      r.opts=[['skip','Skip']];
+      return;
+    }
+    const d=r.pv.draft, fp=variantFP(d), pk=promptKey(d);
+    r.opts.push(['new','New card']);
+    if(targetId) r.opts.push(['card:'+targetId, 'Add to the card you dropped on']);
+    const dupCard=byFP.get(fp), samePrompt=byPrompt.get(pk);
+    if(samePrompt && samePrompt!==targetId) r.opts.push(['card:'+samePrompt, 'Add to the card with this prompt']);
+    if(seenPK.has(pk)) r.opts.push(['row:'+seenPK.get(pk), `Add to image ${seenPK.get(pk)+1}'s card`]);
+    r.opts.push(['skip','Skip']);
+    if(dupCard){ r.action='skip'; r.note='Already in the vault (same prompt, negative, seed and size).'; }
+    else if(seenFP.has(fp)){ r.action='skip'; r.note=`Same as image ${seenFP.get(fp)+1}.`; }
+    else if(targetId) r.action='card:'+targetId;
+    else r.action='new';
+    if(!seenFP.has(fp)) seenFP.set(fp,i);
+    if(!seenPK.has(pk)) seenPK.set(pk,i);
+  });
+  importReview={rows:live, targetId, addTags:true, bad:new Set()};
+  renderImportReview();
+}
+// A row aimed at another row's card becomes a new card itself when that row is not one.
+function effAction(i){
+  const a=importReview.rows[i].action;
+  if(a.startsWith('row:')){ const src=importReview.rows[+a.slice(4)]; return (src && src.action==='new') ? a : 'new'; }
+  return a;
+}
+function importPlan(){
+  const R=importReview, adds=new Map(), rowAdds=new Map(), problems=new Set();
+  R.rows.forEach((r,i)=>{
+    const a=effAction(i);
+    if(a.startsWith('card:')){ const id=a.slice(5); adds.set(id, (adds.get(id)||[]).concat(i)); }
+    if(a.startsWith('row:')){ const j=a.slice(4); rowAdds.set(j, (rowAdds.get(j)||[]).concat(i)); }
+  });
+  for(const [id, list] of adds) if(list.length>cardRoom(id)) list.forEach(i=>problems.add(i));
+  for(const [, list] of rowAdds) if(list.length+1>MAX_VARIANTS) list.forEach(i=>problems.add(i));
+  const count=R.rows.filter(r=>r.action!=='skip').length;
+  return {count, problems};
+}
+function importRowSummary(r){
+  if(!r.pv) return '';
+  const d=r.pv.draft, bits=[];
+  if(d.width && d.height) bits.push(`${d.width}×${d.height}`);
+  const rr=shownRatio(d); if(rr) bits.push(rr);
+  if(d.seed) bits.push('seed '+d.seed);
+  const nl=d.meta && d.meta.loras ? d.meta.loras.length : 0;
+  if(nl) bits.push(`${nl} LoRA${nl===1?'':'s'}`);
+  if(d.author) bits.push('by '+d.author);
+  return bits.join(' · ');
+}
+function renderImportReview(){
+  const R=importReview; if(!R) return;
+  const plan=importPlan();
+  const tgt=R.targetId ? db.prompts.find(x=>x.id===R.targetId) : null;
+  const rows=R.rows.map((r,i)=>{
+    const s=r.pv ? r.pv.shared : null, cat=s && s.category ? (catIdByName(s.category) ? s.category : s.category+' (new)') : '';
+    const where=r.action.startsWith('card:')||r.action.startsWith('row:') ? '' :
+      [cat?`<span class="ircat">→ ${esc(cat)}</span>`:'', (s&&s.tags.length)?s.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join(''):''].join(' ');
+    return `<div class="irow${R.bad.has(i)&&plan.problems.has(i)?' bad':''}" id="ir_${i}">
+      <img src="${r.img.data}" alt="">
+      <div class="irtxt"><div class="irname">${i+1}. ${esc(r.name)}</div>
+        ${r.pv&&r.pv.draft.promptText?`<div class="irprompt">${esc(r.pv.draft.promptText.slice(0,220))}${r.pv.draft.promptText.length>220?'…':''}</div>`:''}
+        <div class="sub">${esc(importRowSummary(r))}</div>
+        ${where?`<div class="irwhere">${where}</div>`:''}
+        ${r.note?`<div class="irnote">${esc(r.note)}</div>`:''}
+        ${plan.problems.has(i)?`<div class="irnote bad">No room — a card holds up to ${MAX_VARIANTS} prompts.</div>`:''}</div>
+      <select aria-label="What to do with image ${i+1}" onchange="importReviewSet(${i}, this.value)" ${r.opts.length<2?'disabled':''}>
+        ${r.opts.map(([v,l])=>`<option value="${esc(v)}" ${v===r.action?'selected':''}>${esc(l)}</option>`).join('')}</select>
+    </div>`;
+  }).join('');
+  const blocked=plan.problems.size>0, none=plan.count===0;
+  $('#modalRoot').innerHTML=`
+  <div class="scrim" onclick="if(event.target===this)closeImportReview()">
+    <div class="modal wide importmodal">
+      <div class="mh"><h3>${tgt?'Add images to this card':'Import images'}</h3><button class="iconbtn" onclick="closeImportReview()" aria-label="Close">✕</button></div>
+      ${tgt?`<div class="mergeflow">${imageFor(tgt)?`<img src="${imageFor(tgt).data}" alt="">`:'<div class="mf-empty"></div>'}<div class="mf-txt">${esc(cardSnippet(tgt))}</div></div>`:''}
+      <div class="sub" style="margin:4px 0 8px">Prompt, negative, seed, size, ratio, notes and generation settings come from each image's Prompt Vault data. A missing category is created.</div>
+      <div class="irows">${rows}</div>
+      <div class="checkline"><input id="ir_tags" type="checkbox" ${R.addTags?'checked':''} onchange="importReview.addTags=this.checked"><label for="ir_tags" style="margin:0;font-size:13px">When an image joins an existing card, also add its tags to that card</label></div>
+      <div class="foot">
+        <button class="btn ghost" onclick="closeImportReview()">Cancel</button>
+        <button class="btn brass${blocked||none?' dim':''}" id="ir_ok" onclick="confirmImportReview()">${none?'Nothing to import':`Import ${plan.count} image${plan.count===1?'':'s'}`}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function importReviewSet(i, v){ const r=importReview && importReview.rows[i]; if(!r) return; r.action=v; renderImportReview(); }
+function closeImportReview(){ importReview=null; closeModal(); }
+async function confirmImportReview(){
+  const R=importReview; if(!R) return;
+  const plan=importPlan();
+  if(plan.problems.size){
+    R.bad=new Set(plan.problems); renderImportReview();
+    const first=document.getElementById('ir_'+[...plan.problems][0]); if(first && first.scrollIntoView) first.scrollIntoView({block:'center'});
+    return toast(`A card holds up to ${MAX_VARIANTS} prompts — change the highlighted images`);
+  }
+  if(!plan.count) return;
+  const now=new Date().toISOString(), made=new Map();
+  let cards=0, variants=0;
+  const asVariant=d=>stripEmpty(Object.assign({id:'v'+uid().slice(1), createdAt:now}, cleanDraft(d)));
+  R.rows.forEach((r,i)=>{
+    if(effAction(i)!=='new') return;
+    const d=Object.assign({}, r.pv.draft, {image:r.img}), s=r.pv.shared;
+    const c=stripEmpty(Object.assign({id:uid(), createdAt:now, updatedAt:now}, cleanDraft(d),
+      {tags:s.tags.slice(), nsfw:!!s.nsfw, categoryId:s.category ? resolveCatId('new:'+s.category) : null}));
+    db.prompts.push(c); made.set(i, c); cards++;
+  });
+  R.rows.forEach((r,i)=>{
+    const a=effAction(i);
+    let t=null;
+    if(a.startsWith('card:')) t=db.prompts.find(x=>x.id===a.slice(5));
+    else if(a.startsWith('row:')) t=made.get(+a.slice(4));
+    if(!t) return;
+    const d=Object.assign({}, r.pv.draft, {image:r.img});
+    t.variants=(Array.isArray(t.variants)?t.variants:[]).concat(asVariant(d));
+    if(a.startsWith('card:')){
+      if(R.addTags) t.tags=addTagsTo(t.tags||[], r.pv.shared.tags);
+      if(r.pv.shared.nsfw) t.nsfw=true;
+    } else { t.tags=addTagsTo(t.tags||[], r.pv.shared.tags); }
+    t.updatedAt=now; variants++;
+  });
+  importReview=null;
+  const ok=await saveDB();
+  closeModal(); render();
+  if(ok){
+    const bits=[]; if(cards) bits.push(`${cards} new card${cards===1?'':'s'}`); if(variants) bits.push(`${variants} variant${variants===1?'':'s'} added`);
+    toast('Imported — '+bits.join(', '));
+  }
+}
 
 /* ============================ variants (v6.0) ============================
    A card (one entry in db.prompts) holds up to MAX_VARIANTS related prompts.
@@ -882,7 +1349,7 @@ function vAt(p,i){ return (i>0 && p && Array.isArray(p.variants) && p.variants[i
 function variantName(p,i){ const v=vAt(p,i); return (v && v.label) || (i===0 ? 'Main' : 'Variant '+(i+1)); }
 let shownVar={};
 function shownIdx(p){ const i=shownVar[p.id]|0; return (i>=0 && i<vCount(p)) ? i : 0; }
-function variantHay(v){ return ((v.promptText||'')+' '+(v.negativePrompt||'')+' '+(v.seed||'')+' '+(v.comments||'')+' '+(v.label||'')).toLowerCase(); }
+function variantHay(v){ return ((v.promptText||'')+' '+(v.negativePrompt||'')+' '+(v.seed||'')+' '+(v.comments||'')+' '+(v.label||'')+' '+(v.ratio||'')+' '+(v.author||'')+' '+(v.authorUrl||'')+' '+(v.sourceUrl||'')+' '+metaText(v.meta)).toLowerCase(); }
 function variantsMatching(p,q){ const out=[]; for(let i=0;i<vCount(p);i++) if(variantHay(vAt(p,i)).includes(q)) out.push(i); return out; }
 function promptTotal(list){ return list.reduce((a,p)=>a+vCount(p), 0); }
 function cardsText(list, suffix=''){
@@ -928,6 +1395,7 @@ function onCardDragEnd(){
   document.querySelectorAll('.pcard.dragging').forEach(el=>el.classList.remove('dragging'));
 }
 function onCardDragOver(e, id){
+  if(!dragCardId && isFileDrag(e)) return onCardFileDragOver(e, id);
   if(!dragCardId || dragCardId===id) return;
   e.stopPropagation();
   const el=document.getElementById('card-'+id);
@@ -946,6 +1414,7 @@ function onCardDragLeave(e, id){
   el.classList.remove('drop-ok','drop-full');
 }
 function onCardDrop(e, id){
+  if(!dragCardId && isFileDrag(e)) return onCardFileDrop(e, id);
   e.preventDefault(); e.stopPropagation();
   const src=dragCardId;
   onCardDragEnd();
@@ -991,9 +1460,10 @@ function incomingVariant(s, j, name, now){
   const v=vAt(s,j);
   const o={ id: (j>0 && v.id) ? v.id : 'v'+uid().slice(1), createdAt: (j>0 ? v.createdAt : s.createdAt) || now,
     label:(name==null ? (v.label||'') : name).trim(), promptText:v.promptText||'', negativePrompt:v.negativePrompt||'',
-    seed:v.seed||'', width:v.width||null, height:v.height||null, comments:v.comments||'', image:imageFor(v) };
-  if(!o.label) delete o.label;
-  return o;
+    seed:v.seed||'', width:v.width||null, height:v.height||null, ratio:v.ratio||'', comments:v.comments||'', image:imageFor(v),
+    meta:v.meta ? JSON.parse(JSON.stringify(v.meta)) : null,
+    author:v.author||'', authorUrl:v.authorUrl||'', sourceUrl:v.sourceUrl||'' };
+  return stripEmpty(o);
 }
 async function confirmMerge(){
   const st=mergeState; if(!st) return;
@@ -1351,7 +1821,7 @@ function onRollupDrop(e, targetCatId){
 function rollupCardHTML(key, name, prompts, filtering, isUncat){
   const expanded=filtering ? true : (expandedCats[key]===true);
   const preview=expanded ? '' : rollupPreviewHTML(prompts);
-  const dragAttrs=!isUncat?`ondragover="if(dragCardId)return; event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over'); if(dragCardId)return; onRollupDrop(event,'${key}')"`:'';   // a CARD being dragged (v6.1) is not a category reorder
+  const dragAttrs=!isUncat?`ondragover="if(dragCardId||isFileDrag(event))return; event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over'); if(dragCardId||isFileDrag(event))return; onRollupDrop(event,'${key}')"`:'';   // a CARD being dragged (v6.1) is not a category reorder
   const handle=!isUncat?`<span class="drag-handle" draggable="true" onclick="event.stopPropagation()" ondragstart="onRollupDragStart(event,'${key}')" ondragend="onRollupDragEnd()" title="Drag to reorder">${GRIP_ICON}</span>`:`<span class="drag-handle-spacer"></span>`;
   return `<div id="rollup-${key}" class="rollup ${expanded?'open':''}" ${dragAttrs}>
     <div class="rollup-head" onclick="toggleCategoryRollup('${key}')">
@@ -1488,15 +1958,11 @@ function nearestRatio(w,h){
   const txt = w>=h ? `${M}:${N}` : `${N}:${M}`;
   return (best.err<1e-9 ? '' : '≈ ')+txt;
 }
-function imageRatioTag(im){
+function imageRatioTag(im, recorded){
+  const rec=cleanRatio(recorded);
+  if(rec) return `<span class="ratiotag" title="Ratio recorded with this image">${rec}</span>`;
   if(!im || !im.w || !im.h) return '';
   return `<span class="ratiotag" title="Image ratio, rounded to whole numbers — a hint at the generation size used. Stored copy is ${im.w}×${im.h}px.">${nearestRatio(im.w, im.h)}</span>`;
-}
-function updateWHRatio(){
-  const el=$('#wh_ratio'); if(!el) return;
-  const w=parseInt($('#f_width').value,10), h=parseInt($('#f_height').value,10);
-  const r=aspectRatioLabel(w,h);
-  el.textContent=r||''; el.hidden=!r;
 }
 function cardHTML(p){
   const n=vCount(p), multi=n>1, i=shownIdx(p), v=vAt(p,i);
@@ -1509,7 +1975,7 @@ function cardHTML(p){
   const tagChips=(p.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
   const comments=(v.comments||'').trim();
   const seed=(v.seed||'').trim();
-  const ratio=aspectRatioLabel(v.width, v.height);
+  const ratio=shownRatio(v), hasSize=!!(v.width && v.height);
   const pinned=trayId===p.id, qpos=trayId ? trayQueue.indexOf(p.id)+1 : 0;
   return `<div class="pcard${multi?' multi':''}${pinned?' tray-on':''}${qpos?' queued':''}" id="card-${p.id}" ondragenter="onCardDragOver(event,'${p.id}')" ondragover="onCardDragOver(event,'${p.id}')" ondragleave="onCardDragLeave(event,'${p.id}')" ondrop="onCardDrop(event,'${p.id}')">
     <div class="tw">${img}${nav}<span class="vgrip" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragend="onCardDragEnd()" title="Drag onto another card to add it there as a variant" aria-label="Drag to another card">${GRIP_ICON}</span>${qpos?`<span class="qbadge">Queued · ${qpos}</span>`:''}<button class="vpin${pinned?' on':''}" onclick="toggleTray('${p.id}')" title="${pinned?'Unpin from the merge tray':'Collect into this card: pin it to the top of the Library, then drag other cards onto it'}" aria-label="${pinned?'Unpin from the merge tray':'Collect into this card'}" aria-pressed="${pinned}">${TRAY_ICON}</button></div>
@@ -1518,8 +1984,9 @@ function cardHTML(p){
       ${p.nsfw?'<span class="pill nsfw">Protected</span>':''}
       <div class="ptext">${esc(v.promptText)}</div>
       ${comments?`<div class="pcomments">📝 ${esc(comments)}</div>`:''}
+      ${v.author?`<div class="pcredit">by <b>${esc(v.author)}</b></div>`:''}
       ${seed?`<div class="pseed">Seed: <code>${esc(seed)}</code></div>`:''}
-      ${ratio?`<div class="pseed">Size: <code>${v.width}×${v.height}</code> · <code>${ratio}</code></div>`:''}
+      ${hasSize?`<div class="pseed">Size: <code>${v.width}×${v.height}</code>${ratio?` · <code>${esc(ratio)}</code>`:''}</div>`:(ratio?`<div class="pseed">Ratio: <code>${esc(ratio)}</code></div>`:'')}
       <div class="tagrow">${tagChips}</div>
     </div>
     <div class="foot">
@@ -1877,7 +2344,7 @@ function renderLightbox(){
   $('#modalRoot').innerHTML=`
   <div class="scrim imglightbox" onclick="if(event.target===this)closeModal()">
     <div class="modal" id="lbModal" style="width:${lightboxWidthCSS(im.w, im.h)}">
-      <div class="mh"><h3 style="font-size:14px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Reference image<span id="lbPos" style="color:var(--ink)">${pos}</span>${vchip}<span id="lbRatio">${imageRatioTag(im)}</span></h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
+      <div class="mh"><h3 style="font-size:14px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Reference image<span id="lbPos" style="color:var(--ink)">${pos}</span>${vchip}<span id="lbRatio">${imageRatioTag(im, v.ratio)}</span></h3><button class="iconbtn" onclick="closeModal()" aria-label="Close">✕</button></div>
       <div style="position:relative">
         ${canStep?`<button class="lightbox-nav left" onclick="lightboxStep(-1)" title="Previous image" aria-label="Previous image">‹</button>`:''}
         <img src="${im.data}" onload="onLightboxImgLoad(this)" style="display:block;width:100%;max-height:${LB_IMG_VH}vh;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:var(--surface-2)">
@@ -1911,7 +2378,7 @@ function onLightboxImgLoad(img){
   const cur=lightboxCurrent(), im=cur && imageFor(cur.v);
   if(!im || (im.w && im.h)) return;
   const m=$('#lbModal'); if(m) m.style.width=lightboxWidthCSS(img.naturalWidth, img.naturalHeight);
-  const r=$('#lbRatio'); if(r) r.innerHTML=imageRatioTag({w:img.naturalWidth, h:img.naturalHeight});
+  const r=$('#lbRatio'); if(r){ const c=lightboxCurrent(); r.innerHTML=imageRatioTag({w:img.naturalWidth, h:img.naturalHeight}, c && c.v.ratio); }
 }
 function lightboxGo(index){
   const L=lightboxState.items.length; if(!L) return;
@@ -1965,7 +2432,9 @@ function varDraft(v, keepId){
   v=v||{};
   return { id: keepId ? (v.id||null) : null, createdAt: keepId ? (v.createdAt||null) : null,
     label:v.label||'', promptText:v.promptText||'', negativePrompt:v.negativePrompt||'', seed:v.seed||'',
-    width:v.width||'', height:v.height||'', comments:v.comments||'', image:imageFor(v) };
+    width:v.width||'', height:v.height||'', ratio:v.ratio||'', comments:v.comments||'', image:imageFor(v),
+    author:v.author||'', authorUrl:v.authorUrl||'', sourceUrl:v.sourceUrl||'',
+    meta:(v.meta && typeof v.meta==='object') ? JSON.parse(JSON.stringify(v.meta)) : null };
 }
 function draftName(d,j){ return (d.label||'').trim() || (j===0 ? 'Main' : 'Variant '+(j+1)); }
 function curDraft(){ return modalState.vars[modalState.idx]; }
@@ -1975,6 +2444,8 @@ function captureModal(){
   if(document.getElementById('f_prompt')){
     d.label=val('f_vlabel')||''; d.promptText=val('f_prompt'); d.negativePrompt=val('f_negprompt');
     d.seed=val('f_seed'); d.width=val('f_width'); d.height=val('f_height'); d.comments=val('f_comments');
+    if(document.getElementById('f_ratio')) d.ratio=val('f_ratio')||'';
+    if(document.getElementById('f_author')){ d.author=val('f_author')||''; d.authorUrl=val('f_authorurl')||''; d.sourceUrl=val('f_sourceurl')||''; }
   }
   if(document.getElementById('f_category')){
     modalState.shared.categoryId=val('f_category')||'';
@@ -1985,11 +2456,7 @@ function captureModal(){
 function renderImgPreview(){
   const im=curDraft() && curDraft().image;
   if(!im) return `<div class="imgempty"><span>No image attached</span><button type="button" class="btn sm" onclick="pickModalImage()">Choose image…</button></div>`;
-  return `<img class="imgprev" src="${im.data}" style="cursor:zoom-in" title="Click to view full size" onclick="openImageViewer()" alt="Reference image"><div class="edimgbar"><button type="button" class="btn sm" onclick="pickModalImage()">Replace…</button><button type="button" class="btn sm ghost" onclick="removeModalImage()">Remove</button>${im.w&&im.h?`<span class="sub">Image ratio ${imageRatioTag(im)}</span>`:''}</div>`;
-}
-function onModalImagePicked(input){
-  const f=input.files[0]; if(!f) return;
-  resizeImageFile(f, img=>{ captureModal(); curDraft().image=img; renderPromptModal(); });
+  return `<img class="imgprev" src="${im.data}" style="cursor:zoom-in" title="Click to view full size" onclick="openImageViewer()" alt="Reference image"><div class="edimgbar"><button type="button" class="btn sm" onclick="pickModalImage()">Replace…</button><button type="button" class="btn sm ghost" onclick="removeModalImage()">Remove</button>${(im.w&&im.h)||cleanRatio(curDraft().ratio)?`<span class="sub">Image ratio ${imageRatioTag(im, curDraft().ratio)}</span>`:''}</div>`;
 }
 function removeModalImage(){ captureModal(); curDraft().image=null; renderPromptModal(); }
 function pickModalImage(){ const f=$('#f_img'); if(f){ f.value=''; f.click(); } }
@@ -2042,7 +2509,8 @@ function renderPromptModal(){
   const {id, vars, idx, shared, msg}=modalState;
   const d=vars[idx], n=vars.length, full=n>=MAX_VARIANTS;
   const prevScroll=(document.querySelector('#modalRoot .edbody')||{}).scrollTop||0;
-  const wr=aspectRatioLabel(parseInt(d.width,10),parseInt(d.height,10));
+  const wr=cleanRatio(d.ratio)||standardRatio(d.width,d.height), wstd=standardRatio(d.width,d.height);
+  const needRatio=!!(parseInt(d.width,10)>0 && parseInt(d.height,10)>0 && !wr && !String(d.ratio||'').trim());
   const act=(a,label,dis,extra='')=>`<button type="button" class="btn sm" onclick="variantAction('${a}')" ${dis?'disabled':''} ${extra}>${label}</button>`;
   $('#modalRoot').innerHTML=`
   <div class="scrim" onclick="if(event.target===this)closeModal()">
@@ -2062,7 +2530,7 @@ function renderPromptModal(){
           ${act('split','Split to own card',n<=1,'title="Take this variant out into a card of its own (same category and tags) when you save"')}
           ${act('delete','Delete variant',n<=1,'style="color:var(--loss);border-color:var(--loss-soft)"')}
         </div>
-        ${msg?`<div class="vmsg">${esc(msg)}</div>`:''}
+        ${pvPendingHTML() || (msg?`<div class="vmsg">${esc(msg)}</div>`:'')}
         <div class="edgrid">
           <div class="edcol">
             <div class="edimg">
@@ -2073,11 +2541,13 @@ function renderPromptModal(){
             <div><label class="fld" for="f_seed">Seed (optional)</label>
               <input id="f_seed" placeholder="e.g. 1847293650" inputmode="numeric" value="${esc(d.seed)}" style="font-family:var(--mono)"></div>
             <div><label class="fld" for="f_width">Size (optional) <span id="wh_ratio" class="ratiotag" ${wr?'':'hidden'}>${wr||''}</span></label>
-              <div class="whrow">
+              <div class="whrow ratio">
                 <input id="f_width" type="number" min="1" step="1" placeholder="Width" aria-label="Width" oninput="updateWHRatio()" value="${esc(d.width)}">
                 <span>×</span>
                 <input id="f_height" type="number" min="1" step="1" placeholder="Height" aria-label="Height" oninput="updateWHRatio()" value="${esc(d.height)}">
-              </div></div>
+                <input id="f_ratio" class="ratioin${needRatio?' need':''}" placeholder="${esc(wstd||'e.g. 16:9')}" aria-label="Ratio" title="Ratio as recorded or chosen, e.g. 16:9. Leave blank to use the size's own ratio when it is a standard one." oninput="updateWHRatio()" value="${esc(d.ratio||'')}">
+              </div>
+              <div class="whhint" id="wh_hint" ${needRatio?'':'hidden'}>The ratio can't be worked out from this size — fill it in (e.g. 9:16).</div></div>
             <div><label class="fld" for="f_comments">Notes${n>1?' for this variant':' / comments'}</label>
               <textarea id="f_comments" class="grow" rows="3" placeholder="Any notes about this prompt..." oninput="autoGrow(this)">${esc(d.comments)}</textarea></div>
           </div>
@@ -2090,6 +2560,15 @@ function renderPromptModal(){
               <textarea id="f_negprompt" class="grow" rows="2" placeholder="e.g. blurry, low quality, extra limbs..." oninput="autoGrow(this)">${esc(d.negativePrompt)}</textarea></div>
           </div>
         </div>
+        <div class="credgrid" style="margin-top:12px">
+          <div><label class="fld" for="f_author">Prompt author (optional)</label>
+            <input id="f_author" placeholder="e.g. Jane Doe" value="${esc(d.author||'')}"></div>
+          <div><div class="fldrow"><label class="fld" for="f_authorurl">Author URL (optional)</label><button type="button" class="btn sm" onclick="copyField('f_authorurl','Author URL copied')" title="Copy the author URL">Copy</button></div>
+            <input id="f_authorurl" placeholder="https://…" spellcheck="false" value="${esc(d.authorUrl||'')}"></div>
+          <div><div class="fldrow"><label class="fld" for="f_sourceurl">Image source URL (optional)</label><button type="button" class="btn sm" onclick="copyField('f_sourceurl','Source URL copied')" title="Copy the image source URL">Copy</button></div>
+            <input id="f_sourceurl" placeholder="https://…" spellcheck="false" value="${esc(d.sourceUrl||'')}"></div>
+        </div>
+        ${editorMetaHTML(d)}
       </div>
       <div class="rowlabel" style="margin-top:14px">${n>1?`Shared by all ${n} variants`:'Card'}</div>
       <div class="edshared">
@@ -2097,6 +2576,7 @@ function renderPromptModal(){
           <select id="f_category">
             <option value="">— Uncategorized —</option>
             ${db.libCategories.map(c=>`<option value="${esc(c.id)}" ${shared.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+            ${String(shared.categoryId||'').startsWith('new:')?`<option value="${esc(shared.categoryId)}" selected>${esc(shared.categoryId.slice(4))} (new)</option>`:''}
           </select></div>
         <div><label class="fld" for="f_tags">Tags (comma separated)</label>
           <input id="f_tags" placeholder="e.g. landscape, cinematic" list="tagsuggest" value="${esc(shared.tags)}">
@@ -2128,7 +2608,7 @@ function variantAction(a){
   let msg='';
   if(a==='new'){
     if(n>=MAX_VARIANTS) return toast(`A card holds up to ${MAX_VARIANTS} prompts`);
-    s.vars.push(Object.assign(varDraft(null), {width:d.width, height:d.height}));
+    s.vars.push(Object.assign(varDraft(null), {width:d.width, height:d.height, ratio:d.ratio}));
     s.idx=n; msg='New blank variant — the size was carried over from the one you were on.';
   } else if(a==='dup'){
     if(n>=MAX_VARIANTS) return toast(`A card holds up to ${MAX_VARIANTS} prompts`);
@@ -2154,12 +2634,17 @@ function variantAction(a){
 function cleanDraft(d){
   return { label:(d.label||'').trim(), promptText:(d.promptText||'').trim(), negativePrompt:(d.negativePrompt||'').trim(),
     seed:(d.seed||'').trim(), width:parseInt(d.width,10)||null, height:parseInt(d.height,10)||null,
-    comments:(d.comments||'').trim(), image:d.image||null };
+    ratio:cleanRatio(d.ratio), comments:(d.comments||'').trim(), image:d.image||null, meta:d.meta||null,
+    author:String(d.author||'').trim(), authorUrl:String(d.authorUrl||'').trim(), sourceUrl:String(d.sourceUrl||'').trim() };
 }
 async function savePromptModal(){
   captureModal();
   const s=modalState;
   for(let j=0;j<s.vars.length;j++){
+    if(String(s.vars[j].ratio||'').trim() && !cleanRatio(s.vars[j].ratio)){
+      if(s.idx!==j){ s.idx=j; s.msg=''; renderPromptModal(); }
+      return toast('Ratio should look like 16:9');
+    }
     if(!(s.vars[j].promptText||'').trim()){
       if(s.idx!==j){ s.idx=j; s.msg=''; renderPromptModal(); }
       return toast(s.vars.length>1 ? `Enter a prompt for variant ${j+1}` : 'Enter a prompt');
@@ -2167,7 +2652,7 @@ async function savePromptModal(){
   }
   const now=new Date().toISOString();
   const tags=String(s.shared.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
-  const categoryId=s.shared.categoryId||null, nsfw=!!s.shared.nsfw;
+  const categoryId=resolveCatId(s.shared.categoryId), nsfw=!!s.shared.nsfw;
   const isEdit=!!s.id;
   /* The primary keeps the pre-v6 field names on the card itself, so a vault
      with no variants is byte-for-byte the v5 shape and the browser build still
@@ -2175,15 +2660,14 @@ async function savePromptModal(){
   const [prim, ...rest]=s.vars.map(cleanDraft);
   const variants=rest.map((v,k)=>{ const src=s.vars[k+1];
     const o=Object.assign({id: src.id || 'v'+uid().slice(1), createdAt: src.createdAt || now}, v);
-    if(!o.label) delete o.label; return o; });
+    return stripEmpty(o); });
   let p=s.id ? db.prompts.find(x=>x.id===s.id) : null;
   const fields=Object.assign({}, prim, {tags, nsfw, categoryId});
   if(p){ Object.assign(p, fields); p.updatedAt=now; }
   else { p=Object.assign({id:uid(), createdAt:now, updatedAt:now}, fields); db.prompts.push(p); }
-  if(!p.label) delete p.label;
+  stripEmpty(p);
   if(variants.length) p.variants=variants; else delete p.variants;
-  const splitCards=s.splits.map(x=>{ const c=Object.assign({id:uid(), createdAt:now, updatedAt:now}, cleanDraft(x), {tags:tags.slice(), nsfw, categoryId});
-    if(!c.label) delete c.label; return c; });
+  const splitCards=s.splits.map(x=>stripEmpty(Object.assign({id:uid(), createdAt:now, updatedAt:now}, cleanDraft(x), {tags:tags.slice(), nsfw, categoryId})));
   for(const c of splitCards) db.prompts.push(c);
   shownVar[p.id]=Math.min(s.idx, vCount(p)-1);
   const ok=await saveDB();
@@ -2436,16 +2920,20 @@ function cardDetailDiffs(cur, curDb, inc, incDb){
   const cf=cardFPs(cur), inf=cardFPs(inc);
   if(cf.join('\u0002')!==inf.join('\u0002')) out.push('variant order');
   // pair variants by fingerprint, in order
-  const used=new Set(); let names=false, notes=false, imgs=false;
+  const used=new Set(); let names=false, notes=false, imgs=false, ratios=false, sets=false, creds=false;
   for(let i=0;i<inf.length;i++){
     const j=cf.findIndex((k,jj)=>k===inf[i] && !used.has(jj)); if(j<0) continue; used.add(j);
     const a=vAt(cur,j), b=vAt(inc,i);
     if(fpNorm(a.label)!==fpNorm(b.label)) names=true;
     if(String(a.comments||'').trim()!==String(b.comments||'').trim()) notes=true;
+    if(cleanRatio(a.ratio)!==cleanRatio(b.ratio)) ratios=true;
+    if(['author','authorUrl','sourceUrl'].some(k=>String(a[k]||'').trim()!==String(b[k]||'').trim())) creds=true;
+    if(JSON.stringify(a.meta||null)!==JSON.stringify(b.meta||null)) sets=true;
     const ia=imageFor(a), ib=imageFor(b);
     if((ia?ia.data:'')!==(ib?ib.data:'')) imgs=true;
   }
   if(names) out.push('names'); if(notes) out.push('notes'); if(imgs) out.push('images');
+  if(ratios) out.push('ratio'); if(sets) out.push('settings'); if(creds) out.push('credit');
   return out;
 }
 function planMerge(curDb, incDb){

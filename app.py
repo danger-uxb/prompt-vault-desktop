@@ -29,8 +29,8 @@ from vault import (
     read_maybe_gzip, is_encrypted_wrapper,
 )
 
-APP_VERSION = "6.8"
-APP_BUILD = "2026-11-03"
+APP_VERSION = "7.1"
+APP_BUILD = "2026-11-08"
 
 # Beside the app whether we're a script or a PyInstaller one-file bundle.
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
