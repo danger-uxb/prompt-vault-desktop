@@ -102,6 +102,15 @@ sample pictures were rendered from those prompts by Smaller Hammer; the original
 
 The prompts and images remain cupajoelite's; the MIT licence below covers the software only.
 
+##
+Tip of the day: I've got nuttin, its been a long day.
+Keep safe and its always that small skinny wire at the back. Nooo!! not that one. Chonky
+~~~
+ (\(\
+ (._.)
+c(___)
+~~~
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). © 2026 Smaller Hammer.
